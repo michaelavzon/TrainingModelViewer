@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f2a4a"/>
+      <stop offset="1" stop-color="#1b5f8c"/>
+    </linearGradient>
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="260" y1="740" x2="830" y2="430">
+      <stop offset="0" stop-color="#ff8a3d"/>
+      <stop offset="0.45" stop-color="#ffc94a"/>
+      <stop offset="1" stop-color="#5ee6a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- faint mountain ridge -->
+  <path d="M0 800 L230 590 L360 690 L560 470 L760 660 L880 560 L1024 680 L1024 1024 L0 1024 Z" fill="#ffffff" opacity="0.09"/>
+  <!-- readiness gauge: 3/4 ring -->
+  <path d="M299.9 712.1 A300 300 0 1 1 724.1 712.1" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="56" stroke-linecap="round"/>
+  <path d="M299.9 712.1 A300 300 0 1 1 808.3 453.1" fill="none" stroke="url(#ring)" stroke-width="56" stroke-linecap="round"/>
+  <!-- pulse line that climbs to a peak -->
+  <polyline points="290,560 395,560 440,470 490,640 545,380 600,560 735,560" fill="none" stroke="#ffffff"
+            stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="545" cy="380" r="30" fill="#ffc94a"/>
+</svg>
