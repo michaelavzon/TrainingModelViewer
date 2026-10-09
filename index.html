@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16324f">
+<title>Training Model</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9;--card:#fff;--ink:#17202b;--muted:#5d6b7c;--line:#dfe4ea;--accent:#1f5f99;--accent-ink:#fff;
+  --ok:#2e7d4f;--warn:#b26b00;--bad:#b3261e;--chip:#eef2f6;
+  --t-rest:#e4e6ea;--t-recovery:#d6e8f7;--t-endurance:#cfe8c0;--t-long:#a9d08e;--t-cross:#ddd5ee;--t-openers:#ffe699;
+  --t-tempo:#f8cbad;--t-hard:#f4a6a6;--t-race:#c00000;--t-camphard:#7030a0;--t-campend:#c3b6e2;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a;--card:#18202a;--ink:#e6ebf1;--muted:#9aa8b8;--line:#2a3542;--accent:#6aa9e9;--accent-ink:#0f141a;
+  --ok:#6cc58f;--warn:#e0a640;--bad:#ff7b72;--chip:#222c38;
+  --t-rest:#3a414b;--t-recovery:#2b4560;--t-endurance:#35552c;--t-long:#4d7339;--t-cross:#4a3f63;--t-openers:#6b5a1c;
+  --t-tempo:#7a4a33;--t-hard:#7d3434;--t-race:#c00000;--t-camphard:#7030a0;--t-campend:#4f4570;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f141a;--card:#18202a;--ink:#e6ebf1;--muted:#9aa8b8;--line:#2a3542;--accent:#6aa9e9;--accent-ink:#0f141a;
+  --ok:#6cc58f;--warn:#e0a640;--bad:#ff7b72;--chip:#222c38;
+  --t-rest:#3a414b;--t-recovery:#2b4560;--t-endurance:#35552c;--t-long:#4d7339;--t-cross:#4a3f63;--t-openers:#6b5a1c;
+  --t-tempo:#7a4a33;--t-hard:#7d3434;--t-race:#c00000;--t-camphard:#7030a0;--t-campend:#4f4570;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 16px;max-width:980px;margin:0 auto}
+.bar h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:inline-flex;background:var(--chip);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--ink);padding:6px 14px;border-radius:999px;font:inherit;cursor:pointer}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+nav{display:flex;gap:4px;overflow-x:auto;padding:0 12px 8px;max-width:980px;margin:0 auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{border:0;background:transparent;color:var(--muted);padding:6px 10px;border-radius:8px;font:inherit;white-space:nowrap;cursor:pointer}
+nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:14px 16px 80px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.kv{display:grid;grid-template-columns:minmax(120px,42%) 1fr;gap:4px 10px}
+.kv div:nth-child(odd){color:var(--muted)}
+.big{font-size:26px;font-weight:700}
+.muted{color:var(--muted)}.small{font-size:13px}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-weight:600;font-size:13px;color:var(--ink);background:var(--t-rest)}
+.t-Rest{background:var(--t-rest)}.t-Recovery{background:var(--t-recovery)}.t-Endurance{background:var(--t-endurance)}.t-Long{background:var(--t-long)}
+.t-Cross-training{background:var(--t-cross)}.t-Openers{background:var(--t-openers)}.t-Tempo{background:var(--t-tempo)}.t-Hard{background:var(--t-hard)}
+.t-Race{background:var(--t-race);color:#fff}.t-Camp-hard{background:var(--t-camphard);color:#fff}.t-Camp-endurance{background:var(--t-campend)}
+.note{border-left:3px solid var(--accent);padding:6px 10px;background:var(--chip);border-radius:6px;margin:6px 0;font-size:14px}
+.note.warn{border-color:var(--warn)}.note.bad{border-color:var(--bad)}
+.meter{height:8px;border-radius:4px;background:var(--chip);overflow:hidden}.meter i{display:block;height:100%;background:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.scroll{overflow-x:auto}
+.day{border-bottom:1px solid var(--line);padding:10px 2px;cursor:pointer}
+.day.today{background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:8px;padding:10px 8px}
+.day.past{opacity:.6}
+.day .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.day .detail{display:none;margin-top:8px}.day.open .detail{display:block}
+.week{margin:16px 0 4px;font-weight:600;color:var(--muted);font-size:13px;display:flex;justify-content:space-between}
+form .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:10px}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:3px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;min-width:0}
+textarea{min-height:200px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px}
+legend{color:var(--muted);font-size:13px;padding:0 6px}
+details summary{cursor:pointer;color:var(--accent);margin:6px 0}
+.btn{border:0;background:var(--accent);color:var(--accent-ink);padding:10px 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn.ghost{background:var(--chip);color:var(--ink)}.btn.bad{background:var(--bad);color:#fff}
+.btn:disabled{opacity:.5}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;display:none;max-width:92vw;z-index:20}
+.status{font-size:12px;color:var(--muted);padding:0 16px 6px;max-width:980px;margin:0 auto}
+canvas{max-height:260px}
+.pill{display:inline-block;background:var(--chip);border-radius:999px;padding:2px 8px;font-size:12px;margin:2px 2px 0 0}
+.wcard{border-bottom:1px solid var(--line);padding:10px 0}
+@media (max-width:520px){.kv{grid-template-columns:1fr 1fr}.big{font-size:22px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1 id="title">Training Model</h1>
+    <div class="seg" id="who"></div>
+  </div>
+  <nav id="tabs"></nav>
+  <div class="status" id="status"></div>
+</header>
+<main id="main"></main>
+<div id="toast"></div>
+<script>
+"use strict";
+/* ------------------------------------------------------------------ config + state */
+const LS = {get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},
+            set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const TABS=[["today","Today"],["plan","Plan"],["log","Morning log"],["acts","Activities"],["trends","Trends"],["model","Model"],["workouts","Workouts"],["settings","Settings"]];
+/* Each person's data lives in their own private repository. A token only reaches the repositories it was
+   given access to, so GitHub itself decides who sees what: a token with access to more than one of these
+   repositories is a master login (sees everyone), a token with access to one repository is a normal login. */
+const PEOPLE=[{id:"mike",name:"Mike",repo:"TrainingModel-Mike"},{id:"vivi",name:"Vivi",repo:"TrainingModel-Vivi"}];
+const MASTER="mike";
+const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
+if(S.conn&&!S.athletes.length)S.conn=null;
+if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
+const repoOf=who=>(PEOPLE.find(p=>p.id===who)||{}).repo;
+const cap=a=>a?a[0].toUpperCase()+a.slice(1):"";
+const $=s=>document.querySelector(s);
+const esc=v=>v==null?"":String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=(v,d=0)=>v==null||v===""||isNaN(v)?"–":Number(v).toFixed(d);
+const pct=(v,d=0,sign=false)=>v==null?"–":(sign&&v>0?"+":"")+(v*100).toFixed(d)+"%";
+const tcls=t=>"t-"+String(t||"Rest").replace(/ /g,"-");
+const badge=t=>`<span class="badge ${tcls(t)}">${esc(t||"–")}</span>`;
+const isoToday=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const addDays=(iso,n)=>{const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+const dlabel=iso=>new Date(iso+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+function toast(msg,ms=3500){const t=$("#toast");t.textContent=msg;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",ms)}
+
+/* ------------------------------------------------------------------ GitHub API */
+function b64encode(str){const bytes=new TextEncoder().encode(str);let bin="";for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(bin)}
+function b64decode(b64){const bin=atob(b64.replace(/\n/g,""));const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder().decode(bytes)}
+async function gh(path,opts={}){
+  const c=S.conn;const url=`https://api.github.com/repos/${c.owner}/${opts.repo||repoOf(S.who)}${path}`;
+  const {repo:_r,...o2}=opts;opts=o2;
+  const r=await fetch(url,{cache:"no-store",...opts,headers:{"Authorization":`Bearer ${c.token}`,"X-GitHub-Api-Version":"2022-11-28",Accept:"application/vnd.github+json",...(opts.headers||{})}});
+  if(!r.ok){const t=await r.text();const e=new Error(`GitHub ${r.status}: ${t.slice(0,200)}`);e.status=r.status;throw e}
+  return r;
+}
+async function getFile(p){const r=await gh(`/contents/${p}?ref=${S.conn.branch}`);const j=await r.json();
+  let text=j.content?b64decode(j.content):"";
+  if(!j.content&&j.size>0){text=await (await gh(`/contents/${p}?ref=${S.conn.branch}`,{headers:{Accept:"application/vnd.github.raw+json"}})).text()}
+  return {text,sha:j.sha}}
+async function getRaw(p){return (await gh(`/contents/${p}?ref=${S.conn.branch}`,{headers:{Accept:"application/vnd.github.raw+json"}})).text()}
+async function putFile(p,text,sha,msg){
+  const body={message:msg,content:b64encode(text),branch:S.conn.branch};if(sha)body.sha=sha;
+  const r=await gh(`/contents/${p}`,{method:"PUT",body:JSON.stringify(body)});return (await r.json()).content.sha}
+async function sha(p){const r=await gh(`/contents/${p}?ref=${S.conn.branch}`);return (await r.json()).sha}
+
+/* ------------------------------------------------------------------ CSV */
+function parseCSV(text){
+  const rows=[];let row=[],f="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===","){row.push(f);f=""}else if(c==="\n"){row.push(f);rows.push(row);row=[];f=""}else if(c!=="\r")f+=c}
+  if(f!==""||row.length){row.push(f);rows.push(row)}
+  const head=rows.shift()||[];return {head,rows:rows.filter(r=>r.length>1||r[0]!=="").map(r=>Object.fromEntries(head.map((h,i)=>[h,r[i]??""])))}}
+function toCSV(head,rows){const q=v=>{v=v==null?"":String(v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  return head.join(",")+"\r\n"+rows.map(r=>head.map(h=>q(r[h])).join(",")).join("\r\n")+(rows.length?"\r\n":"")}
+/* read-modify-write with retry on a concurrent change */
+async function editCSV(path,fn,msg){
+  for(let attempt=0;attempt<3;attempt++){
+    const {text,sha:s}=await getFile(path);const t=parseCSV(text);const rows=fn(t.rows,t.head);
+    try{await putFile(path,toCSV(t.head,rows),s,msg);return}catch(e){if(e.status!==409&&e.status!==422)throw e}
+  }throw new Error("The file changed while saving. Please try again.")}
+
+/* ------------------------------------------------------------------ data loading */
+async function loadOut(who,force){
+  if(S.out[who]&&!force)return S.out[who];
+  const txt=await getRaw(`out/${who}.json`);S.out[who]=JSON.parse(txt);return S.out[who]}
+let watch=null;
+async function afterSave(what){
+  toast(`${what} saved. The model is recalculating…`,5000);
+  const who=S.who;const before=await sha(`out/${who}.json`).catch(()=>null);
+  clearInterval(watch);let n=0;setStatus("Recalculating… (usually under a minute)");
+  watch=setInterval(async()=>{n++;
+    try{const now=await sha(`out/${who}.json`);if(now&&now!==before){clearInterval(watch);await loadOut(who,true);setStatus();render();toast("Updated with your new data")}}catch(e){}
+    if(n>24){clearInterval(watch);setStatus("Still recalculating. Reload in a minute, or check the Actions tab of the model repository.")}},8000)}
+function setStatus(extra){const o=S.out[S.who];$("#status").textContent=(extra?extra+" · ":"")+(o?`Calculated ${new Date(o.generated).toLocaleString()}`:"")}
+
+/* ------------------------------------------------------------------ shell */
+function shell(){
+  // only a master login (access to several people's repositories) gets the switch
+  const order=S.me?[S.me,...S.athletes.filter(a=>a!==S.me)]:S.athletes;
+  $("#who").innerHTML=S.conn&&S.athletes.length>1?order.map(a=>`<button data-who="${esc(a)}" class="${a===S.who?"on":""}">${esc(cap(a))}</button>`).join(""):"";
+  $("#tabs").innerHTML=!S.conn?"":TABS.map(([k,l])=>`<button data-tab="${k}" class="${k===S.tab?"on":""}">${l}</button>`).join("");
+}
+document.addEventListener("click",e=>{
+  const w=e.target.closest("[data-who]");if(w&&S.athletes.includes(w.dataset.who)){S.who=w.dataset.who;LS.set("who",S.who);shell();render();return}
+  const t=e.target.closest("[data-tab]");if(t){S.tab=t.dataset.tab;LS.set("tab",S.tab);shell();render();window.scrollTo(0,0);return}
+});
+async function render(){
+  S.charts.forEach(c=>c.destroy());S.charts=[];
+  const m=$("#main");
+  if(!S.conn){m.innerHTML=connectView();bindConnect();return}
+  m.innerHTML=`<div class="card muted">Loading…</div>`;
+  let o;try{o=await loadOut(S.who)}catch(e){m.innerHTML=`<div class="card"><h2>Can't load the model</h2><p>${esc(e.message)}</p><p class="muted">Check the repository name and token in Settings. If the repository is new, run the "Recalculate model" workflow once.</p></div>`+(S.tab==="settings"?settingsConn():"");if(S.tab==="settings")bindSettingsConn();return}
+  $("#title").textContent=`${o.name}: ${TABS.find(t=>t[0]===S.tab)[1]}`;setStatus();
+  const V={today:vToday,plan:vPlan,log:vLog,acts:vActs,trends:vTrends,model:vModel,workouts:vWorkouts,settings:vSettings}[S.tab];
+  await V(o,m);
+  if(S.me&&S.who!==S.me)m.insertAdjacentHTML("afterbegin",`<div class="card small" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span>Master view: you are looking at <b>${esc(o.name)}</b>'s pages. Anything you save here goes into ${esc(o.name)}'s data.</span><button class="btn ghost" style="white-space:nowrap" data-who="${esc(S.me)}">Back to mine</button></div>`);
+}
+
+/* ------------------------------------------------------------------ connect */
+async function ghUser(token){const r=await fetch("https://api.github.com/user",{cache:"no-store",headers:{"Authorization":`Bearer ${token}`,"X-GitHub-Api-Version":"2022-11-28",Accept:"application/vnd.github+json"}});
+  if(!r.ok)throw new Error(r.status===401?"GitHub doesn't accept this token (expired or mistyped?)":`GitHub ${r.status}`);return (await r.json()).login}
+function connectView(){return `<div class="card"><h2>Log in</h2>
+<p>Paste your personal access token. It is stored only on this device and opens your own pages.</p>
+<form id="cf"><div class="row"><label>Personal access token<input name="token" type="password" required autocomplete="off" placeholder="github_pat_…"></label></div>
+<details><summary>Advanced</summary><div class="row"><label>Repository owner<input name="owner" placeholder="the token's GitHub account"></label><label>Branch<input name="branch" value="main"></label></div></details>
+<button class="btn">Log in</button></form></div>`}
+function bindConnect(){const f=$("#cf");if(!f)return;f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));
+  const token=d.token.trim();const btn=f.querySelector("button");btn.disabled=true;
+  try{
+    const login=await ghUser(token);
+    S.conn={owner:(d.owner||"").trim()||login,branch:(d.branch||"main").trim(),token};
+    const ok=[];
+    for(const p of PEOPLE){try{await gh("",{repo:p.repo});ok.push(p.id)}catch(err){if(err.status!==404&&err.status!==403)throw err}}
+    if(!ok.length)throw new Error(`This token can't reach any of the training repositories of ${S.conn.owner}. Check its repository access (or the owner under Advanced).`);
+    const me=ok.length>1?(ok.includes(MASTER)?MASTER:ok[0]):ok[0];
+    S.athletes=ok;S.me=me;S.who=me;S.tab="today";S.out={};
+    LS.set("conn",S.conn);LS.set("athletes",ok);LS.set("me",me);LS.set("who",me);LS.set("tab","today");shell();render();
+  }catch(err){S.conn=null;btn.disabled=false;toast("Could not log in: "+err.message,7000)}}}
+
+/* ------------------------------------------------------------------ TODAY */
+async function vToday(o,m){
+  const D=o.dashboard,t=D.today,R=D.readiness,F=D.form||{},W=D.week,G=D.signals||{};
+  let h="";
+  if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: set the next main event and plan start under Settings.</p></div>`}
+  else{
+    h+=`<div class="card"><h2>Today · ${esc(D.phase)} phase · ${D.event.days===0?"race day":D.event.days+(D.event.days===1?" day":" days")+" to "+esc(D.event.name)}</h2>
+    <div class="actions">${badge(t.type)}<span class="big">${t.minutes?esc(fmtMin(t.minutes)):""}</span><span class="muted">est. load ${fmt(t.load)}</span></div>
+    <p style="margin:8px 0 2px"><b>${esc(t.workout_id)} ${esc(t.session)}</b></p><p class="muted" style="margin:0 0 8px">${esc(t.structure)}</p>
+    ${(t.sets||[]).map((s,i)=>`<div class="note"><b>${i?"Set 2":"Main set"}:</b> ${esc(s.set)}<br><span class="small muted">${esc(s.terrain)}</span></div>`).join("")}
+    <div class="kv small" style="margin-top:8px">
+      ${t.hr_guide?`<div>HR guide</div><div>${esc(t.hr_guide)}</div>`:""}
+      ${t.fuel?`<div>Fuel</div><div>${esc(t.fuel)}</div>`:""}
+      ${t.distance?`<div>Distance</div><div>${esc(t.distance)}</div>`:""}
+      ${t.progression?`<div>Progression</div><div>${esc(t.progression)}</div>`:""}
+      ${t.expected_te?`<div>Expected TE</div><div>${esc(t.expected_te)}</div>`:""}
+      ${t.why?`<div>Why</div><div>${esc(t.why)}</div>`:""}
+    </div>
+    ${t.adjustments?`<div class="note">${esc(t.adjustments)}</div>`:""}
+    ${t.limits?`<div class="note warn">${esc(t.limits)}</div>`:""}
+    </div>`}
+  h+=`<div class="grid">`;
+  if(R){const parts=Object.entries(R.parts||{}).filter(([k,v])=>v!=null);
+    h+=`<div class="card"><h2>Readiness this morning</h2><div class="actions"><span class="big">${fmt(R.score)}</span><span>max today: ${badge(R.max_today)}</span></div>
+    ${R.limits&&R.limits.length?`<div class="note warn">${esc(R.limits.join(", "))}</div>`:""}
+    <div style="margin-top:8px">${parts.map(([k,v])=>`<div class="small" style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="width:90px" class="muted">${esc(PARTN[k]||k)}</span><div class="meter" style="flex:1"><i style="width:${v}%"></i></div><span style="width:28px;text-align:right">${v}</span></div>`).join("")}</div>
+    <div class="kv small" style="margin-top:8px">
+      <div>Garmin readiness · sleep · recovery</div><div>${fmt(R.tr)} · ${fmt(R.sleep)} · ${fmt(R.rec)} h</div>
+      <div>HRV night · 7d · range</div><div>${fmt(R.hrv.night)} · ${fmt(R.hrv.avg7)} · ${R.hrv.low?fmt(R.hrv.low)+"-"+fmt(R.hrv.high):"–"}${R.hrv.avg7&&R.hrv.low?(R.hrv.avg7<R.hrv.low?" LOW":R.hrv.avg7>R.hrv.high?" HIGH":" in range"):""}</div>
+      <div>Resting HR today · 7d</div><div>${fmt(R.rhr.today)} · ${fmt(R.rhr.avg7)}</div>
+      <div>Body Battery recharge · normal · yesterday's min</div><div>${fmt(R.bb.recharge)} · ${fmt(R.bb.normal)} · ${fmt(R.bb.min_yday)}</div>
+      <div>Feel after yesterday · your normal</div><div>${R.feel_yday==null?"–":FEELN[Math.round(R.feel_yday)-1]+" ("+R.feel_yday+")"} · ${fmt(R.feel_normal,1)}</div>
+      <div>Health</div><div>${R.health}/5</div>
+      ${R.cycle_day?`<div>Cycle</div><div>day ${R.cycle_day} · ${esc(R.cycle_phase)}${R.symptoms!=null?" · symptoms "+R.symptoms+"/3":""}</div>`:""}
+    </div></div>`}
+  else h+=`<div class="card"><h2>Readiness this morning</h2><p>Not logged yet.</p><button class="btn" data-tab="log">Log this morning</button></div>`;
+  const row=(l,a)=>`<div>${l}</div><div>${a?a.map((v,i)=>i===2?fmt(v,2):fmt(v)).join(" · "):"–"}</div>`;
+  h+=`<div class="card"><h2>Load and form (ATL · CTL · ratio)</h2><div class="kv small">
+    ${row("This morning",F.now)}${row("Tomorrow after today",F.tomorrow)}${row("End of today (est.)",F.end_of_today)}${row("Main-event morning",F.race_morning)}
+    <div>Form on main-event morning</div><div>${F.race_form==null?"–":F.race_form+(F.race_form>0?" (fresh)":" (still fatigued)")}</div>
+    ${F.race_cycle?`<div>Race day cycle</div><div>${esc(F.race_cycle)}</div>`:""}</div></div>`;
+  h+=`<div class="card"><h2>This week (done · planned)</h2><div class="kv small">
+    <div>Hard days</div><div>${W.hard_done} · ${W.hard_planned}</div><div>Hours</div><div>${W.hours_done} · ${W.hours_planned}</div><div>Load</div><div>${W.load_done} · ${W.load_planned}</div></div>
+    <h2 style="margin-top:12px">Yesterday</h2><div class="small">${D.yesterday.activities} activities · ${fmtMin(D.yesterday.minutes)} · load ${D.yesterday.load}</div>
+    ${D.yesterday.targets.map(x=>`<div class="note small">${esc(x)}</div>`).join("")}</div>`;
+  h+=`<div class="card"><h2>Signals</h2><div class="kv small">
+    <div>Max HR used</div><div>${fmt(G.maxhr)} since ${esc(G.maxhr_since)}<br><span class="muted">${esc(G.maxhr_note)}</span></div>
+    <div>HR strain (load/TSS drift)</div><div>${pct(G.drift,0,true)} · ${esc(G.drift_note)}</div>
+    <div>Drift low · mid · high</div><div>${["Low","Mid","High"].map(b=>pct((G.drift_bands||{})[b],0,true)).join(" · ")}</div>
+    <div>Efficiency factor change · HR vs expected</div><div>${pct(G.ef_change,1,true)} · ${pct(G.hr_vs_expected,1,true)}</div>
+    <div>FTP test?</div><div>${esc(G.ftp_test)}</div>
+    ${G.vo2max?`<div>VO2max (28-day change)</div><div>${G.vo2max[0]} (${G.vo2max[1]==null?"–":(G.vo2max[1]>0?"+":"")+G.vo2max[1]})</div>`:""}
+    ${G.endurance_score?`<div>Endurance Score (28-day change)</div><div>${G.endurance_score[0]} (${G.endurance_score[1]==null?"–":(G.endurance_score[1]>0?"+":"")+G.endurance_score[1]})</div>`:""}
+  </div></div></div>`;
+  h+=`<div class="card"><h2>Next 7 days</h2>${D.next7.map(d=>`<div class="day" style="cursor:default"><div class="top"><span style="width:92px">${dlabel(d.date)}</span>${badge(d.type)}<span>${fmtMin(d.minutes)}</span><span class="muted">${esc(d.session)}</span><span class="muted small">load ${fmt(d.load)}</span></div>${d.adjustments?`<div class="small muted">${esc(d.adjustments)}</div>`:""}</div>`).join("")||"<p class='muted'>The plan ends here.</p>"}</div>`;
+  m.innerHTML=h;
+}
+const PARTN={tr:"Garmin readiness",hrv:"HRV",ratio:"Load ratio",bb:"Body Battery",feel:"Feel",rhr:"Resting HR",pe:"PE vs TE",sleep:"Sleep",rec:"Recovery time"};
+const FEELN=["Very Weak","Weak","Normal","Strong","Very Strong"];
+const fmtMin=m=>{m=Math.round(m||0);if(!m)return "0m";if(m<60)return m+"m";const h=Math.floor(m/60),r=m%60;return h+"h"+(r?String(r).padStart(2,"0"):"")};
+
+/* ------------------------------------------------------------------ PLAN */
+async function vPlan(o,m){
+  const L=o.lists;let wk=null,h=`<div class="card"><h2>Plan to ${esc(o.settings.race_name)} (${esc(o.settings.race)})</h2><p class="small muted">Tap a day for details. "Set type" and "Set minutes" fix a day; Camp marks a training-camp day and Race a B-race. The rest of the week adjusts around it.</p>`;
+  for(const d of o.plan){
+    const mon=d.dow==="Mon"||d===o.plan[0];
+    if(mon){h+=`<div class="week"><span>Week of ${dlabel(d.date)} · ${esc(d.phase)}</span><span>${d.week_hours} h · load ${d.week_load}</span></div>`}
+    h+=`<div class="day ${d.status==="Today"?"today":d.status==="Past"?"past":""}" data-day="${d.date}">
+      <div class="top"><span style="width:92px">${dlabel(d.date)}</span>${badge(d.type)}<span>${fmtMin(d.minutes)}</span><span>${esc(d.workout_id)} ${esc(d.session)}</span>
+      ${d.set_type||d.set_minutes!=null?`<span class="pill">set</span>`:""}${d.cycle_note?`<span class="pill">${d.cycle_note} cycle day ${d.cycle_day}</span>`:""}${d.limits?`<span class="pill" style="color:var(--warn)">limit</span>`:""}</div>
+      <div class="detail small">
+        <div class="kv">
+          <div>Structure</div><div>${esc(d.structure)||"–"}</div>
+          ${(d.sets||[]).map((s,i)=>`<div>${i?"Set 2":"Main set"}</div><div>${esc(s.set)}<br><span class="muted">${esc(s.terrain)}</span></div>`).join("")}
+          ${d.hr_guide?`<div>HR guide</div><div>${esc(d.hr_guide)}</div>`:""}
+          <div>Est. load${d.actual?" (actual)":""}</div><div>${fmt(d.load)}</div>
+          <div>Next morning ATL · CTL · ratio</div><div>${fmt(d.atl_next)} · ${fmt(d.ctl_next)} · ${fmt(d.ratio_next,2)}</div>
+          ${d.fuel?`<div>Fuel</div><div>${esc(d.fuel)}</div>`:""}${d.distance?`<div>Distance</div><div>${esc(d.distance)}</div>`:""}
+          ${d.progression?`<div>Progression</div><div>${esc(d.progression)}</div>`:""}${d.expected_te?`<div>Expected TE</div><div>${esc(d.expected_te)}</div>`:""}
+          ${d.why?`<div>Why</div><div>${esc(d.why)}</div>`:""}
+          <div>Adjustments</div><div>${esc(d.adjustments)||"–"}</div>${d.limits?`<div>Limits</div><div>${esc(d.limits)}</div>`:""}
+          ${d.cycle_day?`<div>Cycle</div><div>day ${d.cycle_day} · ${esc(d.cycle_phase)}</div>`:""}
+        </div>
+        ${d.status!=="Past"?`<form class="ov actions" data-date="${d.date}" style="margin-top:8px">
+          <label style="flex:1">Set type<select name="type"><option value="">(automatic)</option>${L.day_types.map(t=>`<option ${t===d.set_type?"selected":""}>${t}</option>`).join("")}</select></label>
+          <label style="width:120px">Set minutes<input name="minutes" type="number" min="0" max="720" value="${d.set_minutes??""}"></label>
+          <button class="btn" style="align-self:flex-end">Save</button></form>`:""}
+      </div></div>`}
+  m.innerHTML=h+"</div>";
+  m.querySelectorAll(".day").forEach(el=>el.addEventListener("click",e=>{if(e.target.closest("form"))return;el.classList.toggle("open")}));
+  const td=m.querySelector(".day.today");if(td){td.classList.add("open");td.scrollIntoView({block:"center"})}
+  m.querySelectorAll("form.ov").forEach(f=>f.onsubmit=async e=>{e.preventDefault();const date=f.dataset.date,d=Object.fromEntries(new FormData(f));
+    f.querySelector("button").disabled=true;
+    try{await editCSV(`data/${S.who}/plan_overrides.csv`,rows=>{rows=rows.filter(r=>r.date!==date);if(d.type||d.minutes)rows.push({date,type:d.type,minutes:d.minutes,note:""});return rows.sort((a,b)=>a.date<b.date?-1:1)},`Plan: set ${date} (${S.who})`);afterSave("Plan change")}
+    catch(err){toast(err.message,6000)}finally{f.querySelector("button").disabled=false}});
+}
+
+/* ------------------------------------------------------------------ MORNING LOG */
+const LOGF=[["Garmin readiness",[["tr","Training Readiness","number"],["sleep","Sleep score","number"],["rec","Recovery time (h)","number"]]],
+ ["HRV",[["hrv_night","HRV last night (ms)","number"],["hrv_7d","HRV 7-day avg","number"],["hrv_low","Baseline low","number"],["hrv_high","Baseline high","number"]]],
+ ["Resting HR and Body Battery",[["rhr","Resting HR this morning","number"],["rhr_7d","Resting HR 7-day avg","number"],["bb_recharge","Body Battery recharge (overnight)","number"],["bb_min_yday","Body Battery min yesterday","number"]]],
+ ["You",[["health","Health (sick / injured)","health"],["weight","Weight (kg)","number"]]],
+ ["Training load (Garmin)",[["atl","Acute load (ATL) this morning","number"],["ctl","Chronic load (CTL) this morning","number"],["atl_eod_yday","ATL end of yesterday (optional)","number"],["ctl_eod_yday","CTL end of yesterday (optional)","number"]]],
+ ["Garmin status (optional)",[["lf_low","Load focus: low aerobic","number"],["lf_high","Load focus: high aerobic","number"],["lf_anaer","Load focus: anaerobic","number"],["lf_feedback","Load-focus feedback","feedback"],["vo2max","VO2max","number"],["endurance_score","Endurance Score","number"]]]];
+const CYCF=["Cycle",[["cycle_day","Cycle day (1 = first day of period)","number"],["cycle_symptoms","Cycle symptoms (0 none - 3 severe)","sym"]]];
+function field(k,l,type,val,L){
+  if(type==="health")return `<label>${l}<select name="${k}"><option value="">5 Normal</option>${L.health.slice(0,4).map(h=>`<option ${String(val)===h||String(val)===h[0]?"selected":""}>${h}</option>`).join("")}</select></label>`;
+  if(type==="feedback")return `<label>${l}<select name="${k}"><option value=""></option>${L.feedback.map(h=>`<option ${val===h?"selected":""}>${h}</option>`).join("")}</select></label>`;
+  if(type==="sym")return `<label>${l}<select name="${k}"><option value=""></option>${[0,1,2,3].map(h=>`<option ${String(val)===String(h)?"selected":""}>${h}</option>`).join("")}</select></label>`;
+  if(type==="feel")return `<label>${l}<select name="${k}"><option value=""></option>${L.feel.map(h=>`<option ${val===h?"selected":""}>${h}</option>`).join("")}</select></label>`;
+  if(type==="list")return `<label>${l}<select name="${k}"><option value=""></option>${L[k].map(h=>`<option ${val===h?"selected":""}>${esc(h)}</option>`).join("")}</select></label>`;
+  return `<label>${l}<input name="${k}" type="${type}" step="any" inputmode="decimal" value="${esc(val??"")}"></label>`}
+async function vLog(o,m){
+  const L=o.lists;const date=LS.get("logdate",o.today);
+  m.innerHTML=`<div class="card muted">Loading the log…</div>`;
+  const {text}=await getFile(`data/${S.who}/log.csv`);const rows=parseCSV(text).rows;const cur=rows.find(r=>r.date===date)||{};
+  const groups=o.settings.cycle?[...LOGF.slice(0,4),CYCF,...LOGF.slice(4)]:LOGF;
+  let h=`<div class="card"><h2>Morning log · one row per morning, at wake-up</h2>
+  <form id="lf"><div class="row"><label>Date<input name="date" type="date" value="${date}" required></label></div>
+  ${groups.map(([g,fs])=>`<fieldset><legend>${g}</legend><div class="row">${fs.map(([k,l,t])=>field(k,l,t,cur[k],L)).join("")}</div></fieldset>`).join("")}
+  <label>Notes<input name="note" value="${esc(cur.note||"")}"></label>
+  <div class="actions" style="margin-top:12px"><button class="btn">${cur.date?"Update":"Save"} morning</button>${cur.date?`<button type="button" class="btn ghost" id="ldel">Delete this morning</button>`:""}<span class="small muted">Leave a value empty if you don't have it.</span></div></form></div>`;
+  const recent=o.history.slice(-14).reverse();
+  h+=`<div class="card"><h2>Recent mornings</h2><div class="scroll"><table><tr><th>Date</th><th>Readiness</th><th>Max</th><th>HRV</th><th>RHR</th><th>ATL/CTL</th><th>Health</th></tr>
+  ${recent.map(r=>`<tr data-ld="${r.date}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${fmt(r.ready)}</td><td>${r.maxtier==null?"–":["Rest","Recovery","Endurance","Tempo","Hard"][r.maxtier]}</td><td>${fmt(r.hrv)}</td><td>${fmt(r.rhr)}</td><td>${fmt(r.atl)}/${fmt(r.ctl)}</td><td>${fmt(r.health)}</td></tr>`).join("")}</table></div></div>`;
+  m.innerHTML=h;
+  const f=$("#lf");
+  f.date.onchange=()=>{LS.set("logdate",f.date.value);render()};
+  m.querySelectorAll("[data-ld]").forEach(tr=>tr.onclick=()=>{LS.set("logdate",tr.dataset.ld);render()});
+  f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));f.querySelector(".btn").disabled=true;
+    try{await editCSV(`data/${S.who}/log.csv`,(rows,head)=>{rows=rows.filter(r=>r.date!==d.date);const r={};head.forEach(k=>r[k]=d[k]??"");rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:1)},`Morning log ${d.date} (${S.who})`);afterSave("Morning log")}
+    catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
+  const del=$("#ldel");if(del)del.onclick=async()=>{if(!confirm("Delete this morning's row?"))return;
+    try{await editCSV(`data/${S.who}/log.csv`,rows=>rows.filter(r=>r.date!==date),`Delete morning ${date} (${S.who})`);afterSave("Delete")}catch(err){toast(err.message,6000)}};
+}
+
+/* ------------------------------------------------------------------ ACTIVITIES */
+const ACTF={basic:[["date","Date of activity","date"],["sport","Sport","list:sports"],["minutes","Minutes (moving)","number"],["km","Distance (km)","number"],["elev","Elevation gain (m)","number"],["hr_avg","Avg HR","number"],["hr_max","Max HR","number"]],
+ garmin:[["load","Garmin training load","number"],["te_aer","Aerobic TE","number"],["te_an","Anaerobic TE","number"],["benefit","Primary benefit","list:benefits"],["kcal","Calories","number"]],
+ hz:[1,2,3,4,5].map(i=>["hz"+i,`HR Z${i} (%)`,"number"]),
+ power:[["power_avg","Avg power (W)","number"],["np","Normalized power (W)","number"],["cadence","Avg cadence (rpm)","number"],["balance_left","Balance: left (%)","number"]],
+ pz:[1,2,3,4,5,6,7].map(i=>["pz"+i,`Power Z${i} (%)`,"number"]),
+ you:[["workout_id","Plan workout ID","list:workout_ids"],["pe","PE (Perceived Effort, 1-10)","number"],["feel","Feel","feel"]]};
+function afield(k,l,t,val,L){if(t.startsWith("list:")){const lk=t.slice(5);return `<label>${l}<select name="${k}"><option value=""></option>${L[lk].map(h=>`<option ${val===h?"selected":""}>${esc(h)}</option>`).join("")}</select></label>`}return field(k,l,t,val,L)}
+async function vActs(o,m){
+  const L=o.lists;m.innerHTML=`<div class="card muted">Loading activities…</div>`;
+  const {text}=await getFile(`data/${S.who}/activities.csv`);const rows=parseCSV(text).rows;
+  const editId=LS.get("actedit",null);const cur=rows.find(r=>r.id===editId)||{date:addDays(o.today,-1)};
+  const comp=Object.fromEntries(o.activities.map(a=>[a.id,a]));
+  const fs=(title,list,open=true)=>`<fieldset><legend>${title}</legend><div class="row">${list.map(([k,l,t])=>afield(k,l,t,cur[k],L)).join("")}</div></fieldset>`;
+  let h=`<div class="card"><h2>${cur.id?"Edit activity":"Add an activity"} · one row per activity, any sport</h2><form id="af">
+    ${fs("Activity",ACTF.basic)}${fs("Plan session and how it felt",ACTF.you)}${fs("Garmin",ACTF.garmin)}${fs("Time in HR zones (%)",ACTF.hz)}
+    <details ${cur.np||cur.pz1?"open":""}><summary>Power (rides with a power meter only)</summary>${fs("Power",ACTF.power)}${fs("Time in power zones (%)",ACTF.pz)}</details>
+    <label>Notes<input name="note" value="${esc(cur.note||"")}"></label>
+    <div class="actions" style="margin-top:12px"><button class="btn">${cur.id?"Update":"Add"} activity</button>${cur.id?`<button type="button" class="btn ghost" id="anew">New instead</button><button type="button" class="btn bad" id="adel">Delete</button>`:""}</div></form>
+    <p class="small muted">Workout ID: the plan's ID if this was the planned session (see Workouts). Targets hit is checked automatically from time in power or HR zones.</p></div>`;
+  const recent=rows.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
+  h+=`<div class="card"><h2>Recent activities</h2><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
+   ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${esc(r.workout_id)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
+   <p class="small muted">* load estimated from heart rate (no Garmin load logged). Tap a row to edit it. New rows show computed values after the model recalculates.</p></div>`;
+  m.innerHTML=h;
+  m.querySelectorAll("[data-aid]").forEach(tr=>tr.onclick=()=>{LS.set("actedit",tr.dataset.aid);render();window.scrollTo(0,0)});
+  const nb=$("#anew");if(nb)nb.onclick=()=>{LS.set("actedit",null);render()};
+  const f=$("#af");f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));if(!d.date||!d.sport){toast("Date and sport are needed");return}
+    const id=cur.id||Math.random().toString(16).slice(2,12);f.querySelector(".btn").disabled=true;
+    try{await editCSV(`data/${S.who}/activities.csv`,(rows,head)=>{rows=rows.filter(r=>r.id!==id);const r={id};head.forEach(k=>{if(k!=="id")r[k]=d[k]??""});rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)},`Activity ${d.date} ${d.sport} (${S.who})`);
+      LS.set("actedit",null);afterSave("Activity");render()}catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
+  const del=$("#adel");if(del)del.onclick=async()=>{if(!confirm("Delete this activity?"))return;
+    try{await editCSV(`data/${S.who}/activities.csv`,rows=>rows.filter(r=>r.id!==cur.id),`Delete activity ${cur.date} (${S.who})`);LS.set("actedit",null);afterSave("Delete");render()}catch(err){toast(err.message,6000)}};
+}
+
+/* ------------------------------------------------------------------ TRENDS */
+async function vTrends(o,m){
+  const days=LS.get("range",90);
+  const H=o.history.filter(r=>r.date>=addDays(o.today,-days));
+  m.innerHTML=`<div class="card actions"><span class="muted small">Range</span><div class="seg" id="rng">${[30,90,180,365].map(d=>`<button data-r="${d}" class="${d===days?"on":""}">${d} d</button>`).join("")}</div></div>
+  <div class="grid">${["Readiness","HRV","Resting HR","ATL / CTL","Daily load","Body Battery recharge","Weight","VO2max / Endurance Score"].map((t,i)=>`<div class="card"><h2>${t}</h2><canvas id="c${i}"></canvas></div>`).join("")}</div>
+  <div class="card"><h2>Days by class (selected range)</h2><div id="cls" class="small"></div></div>`;
+  m.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{LS.set("range",+b.dataset.r);render()});
+  const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
+  const ink=col("--muted"),grid=col("--line"),acc=col("--accent"),c2="#d9822b",c3="#2e9e6b",c4="#8e6bd1";
+  if(!window.Chart){m.insertAdjacentHTML("beforeend","<p class='muted'>Charts could not load.</p>");return}
+  Chart.defaults.color=ink;Chart.defaults.borderColor=grid;Chart.defaults.font.size=11;
+  const labels=H.map(r=>r.date.slice(5));
+  const mk=(id,datasets,opts={})=>{const c=new Chart($("#"+id),{type:opts.type||"line",data:{labels,datasets},options:{animation:false,maintainAspectRatio:true,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:datasets.length>1,labels:{boxWidth:10}}},elements:{point:{radius:0},line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},...(opts.scales||{})}}});S.charts.push(c)};
+  const s=(k,f)=>H.map(r=>r[k]==null?null:(f?f(r[k]):r[k]));
+  mk("c0",[{label:"Readiness",data:s("ready"),borderColor:acc},{label:"Garmin TR",data:s("tr"),borderColor:c2}]);
+  mk("c1",[{label:"Night",data:s("hrv"),borderColor:acc},{label:"7-day",data:s("hrv7"),borderColor:c2},{label:"Baseline low",data:s("hrv_low"),borderColor:grid,borderDash:[4,4]},{label:"Baseline high",data:s("hrv_high"),borderColor:grid,borderDash:[4,4]}]);
+  mk("c2",[{label:"Today",data:s("rhr"),borderColor:acc},{label:"7-day",data:s("rhr7"),borderColor:c2}]);
+  mk("c3",[{label:"ATL",data:s("atl"),borderColor:c2},{label:"CTL",data:s("ctl"),borderColor:acc}]);
+  mk("c4",[{label:"Load",data:s("load"),backgroundColor:acc}],{type:"bar"});
+  mk("c5",[{label:"Recharge",data:s("bb"),borderColor:c3}]);
+  mk("c6",[{label:"kg",data:s("weight"),borderColor:c4}]);
+  mk("c7",[{label:"VO2max",data:s("vo2"),borderColor:acc,yAxisID:"y"},{label:"Endurance Score",data:s("es"),borderColor:c2,yAxisID:"y1"}],{scales:{y:{position:"left"},y1:{position:"right",grid:{display:false}}}});
+  const cnt={};H.forEach(r=>{const k=r.class||"Not logged";cnt[k]=(cnt[k]||0)+1});
+  $("#cls").innerHTML=Object.entries(cnt).map(([k,v])=>`<span class="pill">${esc(k)}: ${v}</span>`).join("");
+}
+
+/* ------------------------------------------------------------------ MODEL */
+async function vModel(o,m){
+  const M=o.model,A=M.atl_ctl,LF=M.load_focus,B=M.balance,MH=M.maxhr;
+  const kv=list=>`<div class="kv small">${list.map(([a,b])=>`<div>${a}</div><div>${b}</div>`).join("")}</div>`;
+  let h=`<div class="grid"><div class="card"><h2>ATL / CTL response</h2>${kv([["ATL next = a·ATL + b·load",`a ${fmt(A.atl.a,3)} · b ${fmt(A.atl.b,3)} ${A.atl.learned?"(learned)":"(default)"}`],["CTL",`a ${fmt(A.ctl.a,3)} · b ${fmt(A.ctl.b,3)} ${A.ctl.learned?"(learned)":"(default)"}`],["End of day ATL",`c ${fmt(A.atl_eod.a,3)} · e ${fmt(A.atl_eod.b,3)} ${A.atl_eod.learned?"(learned)":"(default)"}`],["End of day CTL",`c ${fmt(A.ctl_eod.a,3)} · e ${fmt(A.ctl_eod.b,3)} ${A.ctl_eod.learned?"(learned)":"(default)"}`],["Morning pairs",A.atl.pairs]])}</div>
+  <div class="card"><h2>Load estimates</h2>${kv([["Load per hour in Z1-Z5",M.zone_load_per_hour.join(" · ")],["Activities used",M.zone_activities],["Calibration (Garmin ÷ estimate)",`${M.load_calibration} (${M.load_calibration_n} sessions)`],["PE expected = a + b·TE",`a ${M.pe_fit[0]} · b ${M.pe_fit[1]} (${M.pe_n} activities)`],["Climb factor (m/min per W/kg)",`${M.climb_factor} (${M.climbs_logged} climbs)`]])}</div>
+  <div class="card"><h2>Max HR</h2>${kv([["Used",`${MH.value} since ${MH.since}`],["All-out efforts in 28 days",MH.allout_28d],["Ignored jumps (14 d)",MH.jumps_14d]])}
+   ${MH.events.length?`<table style="margin-top:8px"><tr><th>Date</th><th>Event</th><th>From</th><th>To</th></tr>${MH.events.slice().reverse().map(e=>`<tr><td>${e.date}</td><td>${esc(e.event)}</td><td>${e.from}</td><td>${e.to}</td></tr>`).join("")}</table>`:""}</div>
+  <div class="card"><h2>HR vs power</h2>${kv([["Load/TSS drift",`${pct(M.drift.value,0,true)} (${M.drift.n_recent} recent, ${M.drift.n_base} baseline rides)`],["EF recent · baseline",`${fmt(M.hr_vs_power.ef_recent,2)} · ${fmt(M.hr_vs_power.ef_base,2)}`],["HR vs expected",pct(M.hr_vs_power.hres,1,true)],["FTP test?",esc(M.hr_vs_power.ftp_test)]])}</div>
+  <div class="card"><h2>Garmin load focus</h2><table><tr><th>Category</th><th>Share</th><th>Target used</th><th>Need</th></tr>${Object.keys(LF.bounds).map(c=>`<tr><td>${c}</td><td>${pct(LF.shares[c])}</td><td>${pct(LF.bounds[c][0])}-${pct(LF.bounds[c][1])}</td><td>${LF.need[c]>0?"shortage":LF.need[c]<0?"above target":"ok"}</td></tr>`).join("")}</table><p class="small muted">Feedback used: ${esc(LF.feedback)||"none in the last 7 days"}</p></div>`;
+  if(B&&B.n)h+=`<div class="card"><h2>Pedal balance</h2>${kv([["Avg imbalance 28 d",fmt(B.avg_28,1)+" % pts"],["< 80 · 80-90 · > 90 rpm",`${fmt(B.lo,1)} · ${fmt(B.mid,1)} · ${fmt(B.hi,1)}`],["Per +10 rpm (rides)",`${fmt(B.slope,1)} (r ${fmt(B.r,2)})`],["Per +10 rpm (test B03)",B.test_n>=3?`${fmt(B.test_slope,1)} (r ${fmt(B.test_r,2)})`:"do test B03"]])}</div>`;
+  if(M.cycle){const C=M.cycle;h+=`<div class="card"><h2>Cycle</h2>${kv([["Mode",esc(C.mode)],["Cycles of data",C.n_cycles],["Strong days",esc(C.strong)],["Weak days",esc(C.weak)],["Symptom caps",Object.entries(C.symptom_caps).map(([k,v])=>`${["","mild","moderate","severe"][k]||k} → ${v>=4?"no cap":"max "+["Rest","Recovery","Endurance","Tempo"][v]}`).join(", ")]])}
+    ${C.notes.map(n=>`<div class="note small">${esc(n)}</div>`).join("")}
+    ${["by_group","by_phase"].map(k=>`<div class="scroll"><table style="margin-top:8px"><tr><th>${k==="by_group"?"Days":"Phase"}</th><th>n</th><th>Readiness</th><th>HRV</th><th>RHR</th><th>Feel</th><th>Symptoms</th><th>Hard hit</th></tr>${Object.entries(C.tables[k]||{}).map(([g,v])=>`<tr><td>${esc(g)}</td><td>${v.days}</td><td>${fmt(v.readiness)}</td><td>${fmt(v.hrv)}</td><td>${fmt(v.rhr)}</td><td>${fmt(v.feel,1)}</td><td>${fmt(v.symptoms,1)}</td><td>${pct(v.hard_hit_rate)}</td></tr>`).join("")}</table></div>`).join("")}
+    ${C.days?`<details style="margin-top:8px"><summary>Cycle days: what her data says</summary><div class="scroll"><table><tr><th>Day</th><th>Mornings</th><th>Readiness vs avg</th><th>Feel vs avg</th><th>Symptoms</th><th>Data score</th><th>Own view</th><th>Blended</th><th>Data says</th><th>Used</th></tr>${Object.entries(C.days).map(([d,v])=>`<tr><td>${d}</td><td>${v.mornings}</td><td>${fmt(v.readiness_vs_avg,1)}</td><td>${fmt(v.feel_vs_avg,2)}</td><td>${fmt(v.symptoms,1)}</td><td>${fmt(v.data_score,1)}</td><td>${fmt(v.own_view)}</td><td>${fmt(v.blended,1)}</td><td>${esc(v.data_says)}</td><td>${esc(v.used)}</td></tr>`).join("")}</table></div></details>`:""}</div>`}
+  const HT=M.health;h+=`<div class="card"><h2>Health levels</h2><table><tr><th>Level</th><th>Days</th><th>Readiness</th><th>HRV</th><th>RHR</th></tr>${Object.entries(HT.levels).map(([k,v])=>`<tr><td>${k}</td><td>${v.days}</td><td>${fmt(v.readiness)}</td><td>${fmt(v.hrv)}</td><td>${fmt(v.rhr)}</td></tr>`).join("")}</table>
+   ${HT.spells.length?`<p class="small muted" style="margin-top:8px">3 days before each sick/injured spell</p><table><tr><th>Start</th><th>HRV (7d then)</th><th>RHR (7d then)</th></tr>${HT.spells.map(s=>`<tr><td>${s.start}</td><td>${fmt(s.hrv_3d_before)} (${fmt(s.hrv_7d_avg_then)})</td><td>${fmt(s.rhr_3d_before)} (${fmt(s.rhr_7d_avg_then)})</td></tr>`).join("")}</table>`:""}</div>`;
+  const sp=Object.entries(M.speeds||{});if(sp.length)h+=`<div class="card"><h2>Speed by sport and terrain</h2><table><tr><th>Sport | terrain</th><th>n</th><th>km/h</th><th>m/km</th></tr>${sp.map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${fmt(v.kmh,1)}</td><td>${fmt(v.m_per_km,1)}</td></tr>`).join("")}</table></div>`;
+  m.innerHTML=h+"</div>";
+}
+
+/* ------------------------------------------------------------------ WORKOUTS */
+async function vWorkouts(o,m){
+  const only=LS.get("wonly",true),ft=LS.get("wtype","");
+  const types=[...new Set(o.workouts.map(w=>w.type))];
+  const list=o.workouts.filter(w=>(!only||w.eligible)&&(!ft||w.type===ft));
+  m.innerHTML=`<div class="card"><div class="actions"><label style="flex:1">Day type<select id="wt"><option value="">All</option>${types.map(t=>`<option ${t===ft?"selected":""}>${t}</option>`).join("")}</select></label>
+   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="wo" style="width:auto" ${only?"checked":""}>Only ${esc(o.name)}'s sessions</label></div>
+   ${list.map(w=>`<div class="wcard"><div class="actions">${badge(w.type)}<b>${esc(w.id)}</b><span>${esc(w.name)}</span><span class="muted small">${esc(w.sport)} · ${fmtMin(w.minutes)} · load ≈${w.est_load}${w.done?` · done ${w.done}×`:""}</span></div>
+     <div class="small" style="margin-top:4px">${esc(w.structure)}</div>
+     ${w.sets.map(s=>`<div class="small muted">${esc(s.set)} | ${esc(s.terrain)}</div>`).join("")}
+     <div class="small muted">${w.hr_guide?esc(w.hr_guide)+" · ":""}${esc(w.focus)} · ${esc(w.progression)}</div>
+     <div class="small" style="margin-top:2px">${esc(w.why)}</div></div>`).join("")}</div>`;
+  $("#wt").onchange=e=>{LS.set("wtype",e.target.value);render()};$("#wo").onchange=e=>{LS.set("wonly",e.target.checked);render()};
+}
+
+/* ------------------------------------------------------------------ SETTINGS */
+const SETF=[["name","Name","text"],["focus","Discipline focus","focus"],["race_name","Main event: name","text"],["race","Main event: date","date"],["start","Plan start date (preferably a Monday)","date"],
+ ["ftp","FTP (W)","number"],["ftp_date","FTP last tested","date"],["weight_fallback","Weight fallback (kg)","number"],["maxhr_manual","Max HR manual / last test","number"],["maxhr_date","Date of that max HR","date"]];
+async function vSettings(o,m){
+  m.innerHTML=`<div class="card muted">Loading settings…</div>`;
+  const path=`config/athletes/${S.who}.json`;const {text,sha:fsha}=await getFile(path);let J=JSON.parse(text);
+  const C=J.cycle||{};
+  let h=`<div class="card"><h2>${esc(J.name)}'s settings</h2><form id="sf">
+   <div class="row">${SETF.map(([k,l,t])=>t==="focus"?`<label>${l}<select name="${k}">${["Marathon skating","XCO MTB","Both"].map(x=>`<option ${J[k]===x?"selected":""}>${x}</option>`).join("")}</select></label>`:`<label>${l}<input name="${k}" type="${t}" step="any" value="${esc(J[k]??"")}"></label>`).join("")}</div>
+   <fieldset><legend>Heart-rate zones: lower bound as % of max HR (update after a test)</legend><div class="row">${[0,1,2,3,4].map(i=>`<label>Z${i+1} %<input name="hz${i}" type="number" step="any" value="${Math.round((J.hr_zones||[])[i]*100)}"></label>`).join("")}</div>
+   <p class="small muted">Now: ${o.settings.hr_zones.map(z=>`${z.zone} ${z.from}-${z.to}`).join(" · ")} bpm (max HR ${o.dashboard.signals.maxhr})</p></fieldset>
+   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="balance_drills" style="width:auto" ${J.balance_drills?"checked":""}>Include pedal-balance drills</label>
+   ${C.enabled!==undefined&&J.cycle&&("length" in C)?`<fieldset><legend>Cycle</legend><div class="row">
+     <label>Cycle-aware planning<select name="c_enabled"><option value="1" ${C.enabled?"selected":""}>Yes</option><option value="0" ${!C.enabled?"selected":""}>No</option></select></label>
+     <label>Strong/weak days<select name="c_mode"><option ${C.mode==="Auto"?"selected":""}>Auto</option><option ${C.mode==="Manual"?"selected":""}>Manual</option></select></label>
+     <label>Average cycle length<input name="c_length" type="number" step="any" value="${C.length}"></label>
+     <label>Strong days from-to<input name="c_strong" value="${(C.strong_days||[]).join("-")}"></label>
+     <label>Weak days from-to<input name="c_weak" value="${(C.weak_days||[]).join("-")}"></label></div></fieldset>`:""}
+   <div class="actions" style="margin-top:12px"><button class="btn">Save settings</button></div></form></div>
+   <div class="card"><h2>Advanced: ${esc(path)}</h2><p class="small muted">Every value here overrides the shared defaults in config/defaults.json of the TrainingModel repository (weekly patterns, readiness weights, thresholds...).</p><textarea id="raw">${esc(JSON.stringify(J,null,2))}</textarea>
+   <div class="actions" style="margin-top:8px"><button class="btn ghost" id="saveraw">Save JSON</button></div></div>`+settingsConn();
+  m.innerHTML=h;bindSettingsConn();
+  const save=async(obj,what)=>{try{await putFile(path,JSON.stringify(obj,null,2)+"\n",fsha,`Settings ${S.who}: ${what}`);afterSave("Settings")}catch(e){toast(e.message,6000)}};
+  $("#sf").onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
+    SETF.forEach(([k,,t])=>{if(d[k]!==undefined&&d[k]!=="")J[k]=t==="number"?+d[k]:d[k]});
+    J.hr_zones=[0,1,2,3,4].map(i=>+d["hz"+i]/100);J.balance_drills=!!d.balance_drills;
+    if(d.c_enabled!==undefined){J.cycle.enabled=d.c_enabled==="1";J.cycle.mode=d.c_mode;J.cycle.length=+d.c_length;
+      const rg=v=>v.split("-").map(x=>+x.trim()).slice(0,2);J.cycle.strong_days=rg(d.c_strong);J.cycle.weak_days=rg(d.c_weak)}
+    save(J,"form")};
+  $("#saveraw").onclick=()=>{let obj;try{obj=JSON.parse($("#raw").value)}catch(e){toast("That isn't valid JSON: "+e.message,6000);return}save(obj,"JSON")};
+}
+function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.athletes.length>1?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)}</p>
+  <div class="actions"><button class="btn ghost" id="reload">Reload data</button><button class="btn ghost" id="theme">Theme: ${LS.get("theme","auto")}</button><button class="btn bad" id="logout">Log out</button></div></div>`}
+function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};render()};
+  const t=$("#theme");if(t)t.onclick=()=>{const n={auto:"light",light:"dark",dark:"auto"}[LS.get("theme","auto")];LS.set("theme",n);applyTheme();render()};
+  const l=$("#logout");if(l)l.onclick=()=>{if(!confirm("Log out and forget the token on this device?"))return;try{["conn","me","who","athletes"].forEach(k=>localStorage.removeItem(k))}catch(e){}S.conn=null;S.me=null;S.athletes=[];S.out={};shell();render()}}
+function applyTheme(){const t=LS.get("theme","auto");if(t==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}
+
+applyTheme();shell();render();
+</script>
+</body>
+</html>
