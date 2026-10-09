@@ -117,7 +117,9 @@ function keepDraft(f,key,skip=[]){
   return {clear,restored:!!d}}
 const TABS_ALL=[["today","Today"],["plan","Plan"],["log","Morning log"],["acts","Activities"],["trends","Trends"],["model","Model"],["workouts","Workouts"],["settings","Settings"],["account","Account"]];
 const MASTER_ONLY=["model","workouts","settings"];
-const tabs=()=>TABS_ALL.filter(([k])=>S.master?k!=="account":!MASTER_ONLY.includes(k));
+// master view: the master's own pages, or another rider's with "Master view" on; "Rider's view" shows that rider's app as they see it
+const masterView=()=>S.master&&!(LS.get("asrider",false)&&S.who!==S.me);
+const tabs=()=>TABS_ALL.filter(([k])=>masterView()?k!=="account":!MASTER_ONLY.includes(k));
 /* Each person's data lives in their own private repository. A token only reaches the repositories it was
    given access to, so GitHub itself decides who sees what: a token with access to more than one of these
    repositories is a master login (sees everyone), a token with access to one repository is a normal login. */
@@ -214,7 +216,10 @@ async function render(){
   $("#title").textContent=`${o.name}: ${tabs().find(t=>t[0]===S.tab)[1]}`;setStatus();
   const V={today:vToday,plan:vPlan,log:vLog,acts:vActs,trends:vTrends,model:vModel,workouts:vWorkouts,settings:vSettings,account:vAccount}[S.tab];
   await V(o,m);
-  if(S.me&&S.who!==S.me)m.insertAdjacentHTML("afterbegin",`<div class="card small" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span>Master view: you are looking at <b>${esc(o.name)}</b>'s pages. Anything you save here goes into ${esc(o.name)}'s data.</span><button class="btn ghost" style="white-space:nowrap" data-who="${esc(S.me)}">Back to mine</button></div>`);
+  if(S.me&&S.who!==S.me){const mv=masterView();
+    m.insertAdjacentHTML("afterbegin",`<div class="card small"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>You are looking at <b>${esc(o.name)}</b>'s pages. Anything you save here goes into ${esc(o.name)}'s data.</span><button class="btn ghost" style="white-space:nowrap" data-who="${esc(S.me)}">Back to mine</button></div>
+     <div class="actions" style="margin-top:8px"><div class="seg" id="viewas"><button data-as="0" class="${mv?"on":""}">Master view</button><button data-as="1" class="${mv?"":"on"}">${esc(o.name)}'s view</button></div><span class="muted">${mv?"All tabs, including Model, Workouts and Settings.":`What ${esc(o.name)} sees.`}</span></div></div>`);
+    m.querySelectorAll("#viewas [data-as]").forEach(b=>b.onclick=()=>{LS.set("asrider",b.dataset.as==="1");if(!tabs().some(x=>x[0]===S.tab)){S.tab="today";LS.set("tab","today")}shell();render()})}
 }
 
 /* ------------------------------------------------------------------ connect */
@@ -243,7 +248,7 @@ function bindConnect(){const f=$("#cf");if(!f)return;f.onsubmit=async e=>{e.prev
 async function vToday(o,m){
   const D=o.dashboard,t=D.today,R=D.readiness,F=D.form||{},W=D.week,G=D.signals||{};
   let h="";
-  if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: ${S.master?"set the next main event and plan start under Settings.":"ask Mike to set the next main event and plan start."}</p></div>`}
+  if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: ${masterView()?"set the next main event and plan start under Settings.":"ask Mike to set the next main event and plan start."}</p></div>`}
   else{
     h+=`<div class="card"><h2>Today · ${esc(D.phase)} phase · ${D.event.days===0?"race day":D.event.days+(D.event.days===1?" day":" days")+" to "+esc(D.event.name)}</h2>
     <div class="actions">${badge(t.type)}<span class="big">${t.minutes?esc(fmtMin(t.minutes)):""}</span><span class="muted">est. load ${fmt(t.load)}</span></div>
