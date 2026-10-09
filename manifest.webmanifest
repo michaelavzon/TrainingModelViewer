@@ -1,6 +1,6 @@
 {
-  "name": "Training Model",
-  "short_name": "Training",
+  "name": "Kairos",
+  "short_name": "Kairos",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

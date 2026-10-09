@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16324f">
-<title>Training Model</title>
+<title>Kairos</title>
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Training">
+<meta name="apple-mobile-web-app-title" content="Kairos">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -36,7 +36,12 @@
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
 .bar{display:flex;align-items:center;gap:10px;padding:10px 16px;max-width:980px;margin:0 auto}
-.bar h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .head{flex:1;min-width:0}
+.brand{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+.brand img{width:34px;height:34px;border-radius:9px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.brand b{display:block;font-size:19px;letter-spacing:.06em;line-height:1.1}
+.brand small{display:block;font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar h1{font-size:15px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg{display:inline-flex;background:var(--chip);border-radius:999px;padding:3px}
 .seg button{border:0;background:transparent;color:var(--ink);padding:6px 14px;border-radius:999px;font:inherit;cursor:pointer}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
@@ -91,7 +96,10 @@ canvas{max-height:260px}
 <body>
 <header>
   <div class="bar">
-    <h1 id="title">Training Model</h1>
+    <div class="head">
+      <div class="brand"><img src="icon.svg" alt=""><div><b>KAIROS</b><small>This is the moment.</small></div></div>
+      <h1 id="title"></h1>
+    </div>
     <div class="seg" id="who"></div>
   </div>
   <nav id="tabs"></nav>
