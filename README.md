@@ -1,2 +1,0 @@
-# TrainingModelViewer
-by michaelavzon

@@ -104,13 +104,29 @@ canvas{max-height:260px}
 /* ------------------------------------------------------------------ config + state */
 const LS = {get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},
             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const TABS=[["today","Today"],["plan","Plan"],["log","Morning log"],["acts","Activities"],["trends","Trends"],["model","Model"],["workouts","Workouts"],["settings","Settings"]];
+/* unsaved form input survives switching tabs or closing the app, per form, on this device only */
+function keepDraft(f,key,skip=[]){
+  const k="draft:"+S.who+":"+key;const d=LS.get(k,null);
+  const fill=()=>{if(!d)return;Object.entries(d).forEach(([n,v])=>{const el=f.elements[n];if(!el||skip.includes(n)||el.type==="submit")return;if(el.type==="checkbox")el.checked=!!v;else el.value=v})};
+  fill();
+  if(d){f.insertAdjacentHTML("afterbegin",`<div class="note small">Restored what you typed earlier and haven't saved yet. <a href="#" class="draftdrop">Discard it</a></div>`);
+    f.querySelector(".draftdrop").onclick=e=>{e.preventDefault();clear();render()}}
+  const save=()=>{const o={};[...f.elements].forEach(el=>{if(el.name&&!skip.includes(el.name))o[el.name]=el.type==="checkbox"?el.checked:el.value});LS.set(k,o)};
+  f.addEventListener("input",save);f.addEventListener("change",save);
+  const clear=()=>{try{localStorage.removeItem(k)}catch(e){}};
+  return {clear,restored:!!d}}
+const TABS_ALL=[["today","Today"],["plan","Plan"],["log","Morning log"],["acts","Activities"],["trends","Trends"],["model","Model"],["workouts","Workouts"],["settings","Settings"],["account","Account"]];
+const MASTER_ONLY=["model","workouts","settings"];
+const tabs=()=>TABS_ALL.filter(([k])=>S.master?k!=="account":!MASTER_ONLY.includes(k));
 /* Each person's data lives in their own private repository. A token only reaches the repositories it was
    given access to, so GitHub itself decides who sees what: a token with access to more than one of these
    repositories is a master login (sees everyone), a token with access to one repository is a normal login. */
 const PEOPLE=[{id:"mike",name:"Mike",repo:"TrainingModel-Mike"},{id:"vivi",name:"Vivi",repo:"TrainingModel-Vivi"}];
 const MASTER="mike";
-const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
+/* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
+   master sees the Model, Workouts and Settings tabs and can change settings. */
+const CODE_REPO="TrainingModel";
+const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
 const repoOf=who=>(PEOPLE.find(p=>p.id===who)||{}).repo;
@@ -136,14 +152,14 @@ async function gh(path,opts={}){
   if(!r.ok){const t=await r.text();const e=new Error(`GitHub ${r.status}: ${t.slice(0,200)}`);e.status=r.status;throw e}
   return r;
 }
-async function getFile(p){const r=await gh(`/contents/${p}?ref=${S.conn.branch}`);const j=await r.json();
+async function getFile(p,repo){const r=await gh(`/contents/${p}?ref=${S.conn.branch}`,{repo});const j=await r.json();
   let text=j.content?b64decode(j.content):"";
-  if(!j.content&&j.size>0){text=await (await gh(`/contents/${p}?ref=${S.conn.branch}`,{headers:{Accept:"application/vnd.github.raw+json"}})).text()}
+  if(!j.content&&j.size>0){text=await (await gh(`/contents/${p}?ref=${S.conn.branch}`,{repo,headers:{Accept:"application/vnd.github.raw+json"}})).text()}
   return {text,sha:j.sha}}
 async function getRaw(p){return (await gh(`/contents/${p}?ref=${S.conn.branch}`,{headers:{Accept:"application/vnd.github.raw+json"}})).text()}
-async function putFile(p,text,sha,msg){
+async function putFile(p,text,sha,msg,repo){
   const body={message:msg,content:b64encode(text),branch:S.conn.branch};if(sha)body.sha=sha;
-  const r=await gh(`/contents/${p}`,{method:"PUT",body:JSON.stringify(body)});return (await r.json()).content.sha}
+  const r=await gh(`/contents/${p}`,{method:"PUT",body:JSON.stringify(body),repo});return (await r.json()).content.sha}
 async function sha(p){const r=await gh(`/contents/${p}?ref=${S.conn.branch}`);return (await r.json()).sha}
 
 /* ------------------------------------------------------------------ CSV */
@@ -182,20 +198,21 @@ function shell(){
   // only a master login (access to several people's repositories) gets the switch
   const order=S.me?[S.me,...S.athletes.filter(a=>a!==S.me)]:S.athletes;
   $("#who").innerHTML=S.conn&&S.athletes.length>1?order.map(a=>`<button data-who="${esc(a)}" class="${a===S.who?"on":""}">${esc(cap(a))}</button>`).join(""):"";
-  $("#tabs").innerHTML=!S.conn?"":TABS.map(([k,l])=>`<button data-tab="${k}" class="${k===S.tab?"on":""}">${l}</button>`).join("");
+  $("#tabs").innerHTML=!S.conn?"":tabs().map(([k,l])=>`<button data-tab="${k}" class="${k===S.tab?"on":""}">${l}</button>`).join("");
 }
 document.addEventListener("click",e=>{
   const w=e.target.closest("[data-who]");if(w&&S.athletes.includes(w.dataset.who)){S.who=w.dataset.who;LS.set("who",S.who);shell();render();return}
-  const t=e.target.closest("[data-tab]");if(t){S.tab=t.dataset.tab;LS.set("tab",S.tab);shell();render();window.scrollTo(0,0);return}
+  const t=e.target.closest("[data-tab]");if(t&&tabs().some(x=>x[0]===t.dataset.tab)){S.tab=t.dataset.tab;LS.set("tab",S.tab);shell();render();window.scrollTo(0,0);return}
 });
 async function render(){
   S.charts.forEach(c=>c.destroy());S.charts=[];
   const m=$("#main");
   if(!S.conn){m.innerHTML=connectView();bindConnect();return}
+  if(!tabs().some(x=>x[0]===S.tab)){S.tab="today";shell()}
   m.innerHTML=`<div class="card muted">Loading…</div>`;
-  let o;try{o=await loadOut(S.who)}catch(e){m.innerHTML=`<div class="card"><h2>Can't load the model</h2><p>${esc(e.message)}</p><p class="muted">Check the repository name and token in Settings. If the repository is new, run the "Recalculate model" workflow once.</p></div>`+(S.tab==="settings"?settingsConn():"");if(S.tab==="settings")bindSettingsConn();return}
-  $("#title").textContent=`${o.name}: ${TABS.find(t=>t[0]===S.tab)[1]}`;setStatus();
-  const V={today:vToday,plan:vPlan,log:vLog,acts:vActs,trends:vTrends,model:vModel,workouts:vWorkouts,settings:vSettings}[S.tab];
+  let o;try{o=await loadOut(S.who)}catch(e){m.innerHTML=`<div class="card"><h2>Can't load the model</h2><p>${esc(e.message)}</p><p class="muted">Check the token, or log out and in again. If the repository is new, run its "Recalculate model" workflow once.</p></div>`+settingsConn();bindSettingsConn();return}
+  $("#title").textContent=`${o.name}: ${tabs().find(t=>t[0]===S.tab)[1]}`;setStatus();
+  const V={today:vToday,plan:vPlan,log:vLog,acts:vActs,trends:vTrends,model:vModel,workouts:vWorkouts,settings:vSettings,account:vAccount}[S.tab];
   await V(o,m);
   if(S.me&&S.who!==S.me)m.insertAdjacentHTML("afterbegin",`<div class="card small" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span>Master view: you are looking at <b>${esc(o.name)}</b>'s pages. Anything you save here goes into ${esc(o.name)}'s data.</span><button class="btn ghost" style="white-space:nowrap" data-who="${esc(S.me)}">Back to mine</button></div>`);
 }
@@ -216,16 +233,17 @@ function bindConnect(){const f=$("#cf");if(!f)return;f.onsubmit=async e=>{e.prev
     const ok=[];
     for(const p of PEOPLE){try{await gh("",{repo:p.repo});ok.push(p.id)}catch(err){if(err.status!==404&&err.status!==403)throw err}}
     if(!ok.length)throw new Error(`This token can't reach any of the training repositories of ${S.conn.owner}. Check its repository access (or the owner under Advanced).`);
-    const me=ok.length>1?(ok.includes(MASTER)?MASTER:ok[0]):ok[0];
-    S.athletes=ok;S.me=me;S.who=me;S.tab="today";S.out={};
-    LS.set("conn",S.conn);LS.set("athletes",ok);LS.set("me",me);LS.set("who",me);LS.set("tab","today");shell();render();
+    let master=false;try{await gh("",{repo:CODE_REPO});master=true}catch(err){if(err.status!==404&&err.status!==403)throw err}
+    const me=master&&ok.includes(MASTER)?MASTER:ok[0];
+    S.athletes=ok;S.master=master;S.me=me;S.who=me;S.tab="today";S.out={};
+    LS.set("conn",S.conn);LS.set("athletes",ok);LS.set("master",master);LS.set("me",me);LS.set("who",me);LS.set("tab","today");shell();render();
   }catch(err){S.conn=null;btn.disabled=false;toast("Could not log in: "+err.message,7000)}}}
 
 /* ------------------------------------------------------------------ TODAY */
 async function vToday(o,m){
   const D=o.dashboard,t=D.today,R=D.readiness,F=D.form||{},W=D.week,G=D.signals||{};
   let h="";
-  if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: set the next main event and plan start under Settings.</p></div>`}
+  if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: ${S.master?"set the next main event and plan start under Settings.":"ask Mike to set the next main event and plan start."}</p></div>`}
   else{
     h+=`<div class="card"><h2>Today · ${esc(D.phase)} phase · ${D.event.days===0?"race day":D.event.days+(D.event.days===1?" day":" days")+" to "+esc(D.event.name)}</h2>
     <div class="actions">${badge(t.type)}<span class="big">${t.minutes?esc(fmtMin(t.minutes)):""}</span><span class="muted">est. load ${fmt(t.load)}</span></div>
@@ -347,11 +365,11 @@ async function vLog(o,m){
   h+=`<div class="card"><h2>Recent mornings</h2><div class="scroll"><table><tr><th>Date</th><th>Readiness</th><th>Max</th><th>HRV</th><th>RHR</th><th>ATL/CTL</th><th>Health</th></tr>
   ${recent.map(r=>`<tr data-ld="${r.date}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${fmt(r.ready)}</td><td>${r.maxtier==null?"–":["Rest","Recovery","Endurance","Tempo","Hard"][r.maxtier]}</td><td>${fmt(r.hrv)}</td><td>${fmt(r.rhr)}</td><td>${fmt(r.atl)}/${fmt(r.ctl)}</td><td>${fmt(r.health)}</td></tr>`).join("")}</table></div></div>`;
   m.innerHTML=h;
-  const f=$("#lf");
+  const f=$("#lf");const dr=keepDraft(f,"log:"+date,["date"]);
   f.date.onchange=()=>{LS.set("logdate",f.date.value);render()};
   m.querySelectorAll("[data-ld]").forEach(tr=>tr.onclick=()=>{LS.set("logdate",tr.dataset.ld);render()});
   f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));f.querySelector(".btn").disabled=true;
-    try{await editCSV(`data/${S.who}/log.csv`,(rows,head)=>{rows=rows.filter(r=>r.date!==d.date);const r={};head.forEach(k=>r[k]=d[k]??"");rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:1)},`Morning log ${d.date} (${S.who})`);afterSave("Morning log")}
+    try{await editCSV(`data/${S.who}/log.csv`,(rows,head)=>{rows=rows.filter(r=>r.date!==d.date);const r={};head.forEach(k=>r[k]=d[k]??"");rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:1)},`Morning log ${d.date} (${S.who})`);dr.clear();afterSave("Morning log")}
     catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
   const del=$("#ldel");if(del)del.onclick=async()=>{if(!confirm("Delete this morning's row?"))return;
     try{await editCSV(`data/${S.who}/log.csv`,rows=>rows.filter(r=>r.date!==date),`Delete morning ${date} (${S.who})`);afterSave("Delete")}catch(err){toast(err.message,6000)}};
@@ -363,31 +381,62 @@ const ACTF={basic:[["date","Date of activity","date"],["sport","Sport","list:spo
  hz:[1,2,3,4,5].map(i=>["hz"+i,`HR Z${i} (%)`,"number"]),
  power:[["power_avg","Avg power (W)","number"],["np","Normalized power (W)","number"],["cadence","Avg cadence (rpm)","number"],["balance_left","Balance: left (%)","number"]],
  pz:[1,2,3,4,5,6,7].map(i=>["pz"+i,`Power Z${i} (%)`,"number"]),
- you:[["workout_id","Plan workout ID","list:workout_ids"],["pe","PE (Perceived Effort, 1-10)","number"],["feel","Feel","feel"]]};
-function afield(k,l,t,val,L){if(t.startsWith("list:")){const lk=t.slice(5);return `<label>${l}<select name="${k}"><option value=""></option>${L[lk].map(h=>`<option ${val===h?"selected":""}>${esc(h)}</option>`).join("")}</select></label>`}return field(k,l,t,val,L)}
+ you:[["workout_id","Plan session","wid"],["pe","PE (Perceived Effort, 1-10)","number"],["feel","Feel","feel"]]};
+const FAMILY={"Road bike":"bike","Indoor bike":"bike","MTB":"bike","Gravel":"bike","Inline skate":"skate","Ice skate":"skate","Hike":"foot","Run":"foot"};
+function widOptions(o,sport,date,val){
+  const W=o.workouts.filter(w=>w.type!=="Rest"),byId=Object.fromEntries(W.map(w=>[w.id,w]));
+  const fam=w=>w.sport===sport||(FAMILY[sport]&&FAMILY[w.sport]===FAMILY[sport]);
+  const near=date?o.plan.filter(p=>p.workout_id&&Math.abs((Date.parse(p.date)-Date.parse(date))/864e5)<=2).map(p=>byId[p.workout_id]).filter(Boolean):[];
+  const planned=[...new Set(near)].filter(w=>!sport||fam(w));
+  const rest=W.filter(w=>(!sport||fam(w))&&(w.eligible||w.id===val)&&!planned.includes(w));
+  const opt=w=>`<option value="${esc(w.id)}" ${val===w.id?"selected":""}>${esc(w.id)} · ${esc(w.name)} (${fmtMin(w.minutes)})</option>`;
+  const other=val&&val!=="-"&&!planned.concat(rest).some(w=>w.id===val)?`<option selected>${esc(val)}</option>`:"";
+  return `<option value="" ${!val?"selected":""}>Auto-detect</option><option value="-" ${val==="-"?"selected":""}>Not a plan session</option>${other}`+
+    (planned.length?`<optgroup label="Planned around this date">${planned.map(opt).join("")}</optgroup>`:"")+
+    (rest.length?`<optgroup label="${sport?"Sessions for this sport":"All sessions"}">${rest.map(opt).join("")}</optgroup>`:"")}
+function afield(k,l,t,val,L){if(t==="wid")return `<label>${l}<select name="${k}"></select></label>`;if(t.startsWith("list:")){const lk=t.slice(5);return `<label>${l}<select name="${k}"><option value=""></option>${L[lk].map(h=>`<option ${val===h?"selected":""}>${esc(h)}</option>`).join("")}</select></label>`}return field(k,l,t,val,L)}
+function widCell(r,c){
+  if(r.workout_id==="-")return `<span class="muted">free</span>`;
+  if(r.workout_id)return esc(r.workout_id);
+  if(!c||c.wid_src===undefined)return `<span class="muted small">pending</span>`;
+  if(c.workout_id)return `${esc(c.workout_id)} <span class="muted small">auto</span>`;
+  return `<span class="muted small">free?</span>`}
+function widNote(c,o){
+  if(!c||c.wid_src!=="auto"||!c.wid_alts)return "";
+  const nm=id=>{const w=o.workouts.find(x=>x.id===id);return w?`${esc(id)} ${esc(w.name)}`:esc(id)};
+  const btn=a=>`<button type="button" class="btn ghost" data-pick="${esc(a.id)}">${nm(a.id)} (${a.score}% match)</button>`;
+  const alts=c.wid_alts.filter(a=>a.id!==c.workout_id);
+  if(c.workout_id)return `<div class="note small">Recognised as <b>${nm(c.workout_id)}</b> (${c.wid_conf==="sure"?"clear match":"likely match"}).${alts.length?` If it was something else, tap it:<div class="actions" style="margin-top:6px">${alts.map(btn).join("")}</div>`:""}</div>`;
+  return `<div class="note small">No clear match, so this counts as a free session.${c.wid_alts.length?` If it was one of these, tap it:<div class="actions" style="margin-top:6px">${c.wid_alts.map(btn).join("")}</div>`:""}</div>`}
 async function vActs(o,m){
   const L=o.lists;m.innerHTML=`<div class="card muted">Loading activities…</div>`;
   const {text}=await getFile(`data/${S.who}/activities.csv`);const rows=parseCSV(text).rows;
   const editId=LS.get("actedit",null);const cur=rows.find(r=>r.id===editId)||{date:addDays(o.today,-1)};
   const comp=Object.fromEntries(o.activities.map(a=>[a.id,a]));
   const fs=(title,list,open=true)=>`<fieldset><legend>${title}</legend><div class="row">${list.map(([k,l,t])=>afield(k,l,t,cur[k],L)).join("")}</div></fieldset>`;
-  let h=`<div class="card"><h2>${cur.id?"Edit activity":"Add an activity"} · one row per activity, any sport</h2><form id="af">
+  let h=`<div class="card"><h2>${cur.id?"Edit activity":"Add an activity"} · one row per activity, any sport</h2>${widNote(comp[cur.id],o)}<form id="af">
     ${fs("Activity",ACTF.basic)}${fs("Plan session and how it felt",ACTF.you)}${fs("Garmin",ACTF.garmin)}${fs("Time in HR zones (%)",ACTF.hz)}
     <details ${cur.np||cur.pz1?"open":""}><summary>Power (rides with a power meter only)</summary>${fs("Power",ACTF.power)}${fs("Time in power zones (%)",ACTF.pz)}</details>
     <label>Notes<input name="note" value="${esc(cur.note||"")}"></label>
     <div class="actions" style="margin-top:12px"><button class="btn">${cur.id?"Update":"Add"} activity</button>${cur.id?`<button type="button" class="btn ghost" id="anew">New instead</button><button type="button" class="btn bad" id="adel">Delete</button>`:""}</div></form>
-    <p class="small muted">Workout ID: the plan's ID if this was the planned session (see Workouts). Targets hit is checked automatically from time in power or HR zones.</p></div>`;
+    <p class="small muted">Plan session: leave it on "Auto-detect". The model matches the activity to the plan from the date, sport, duration, time in HR and power zones and Garmin's primary benefit. Pick a session only to correct it. Targets hit is then checked automatically.</p></div>`;
   const recent=rows.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
   h+=`<div class="card"><h2>Recent activities</h2><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
-   ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${esc(r.workout_id)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
+   ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${widCell(r,c)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
    <p class="small muted">* load estimated from heart rate (no Garmin load logged). Tap a row to edit it. New rows show computed values after the model recalculates.</p></div>`;
   m.innerHTML=h;
   m.querySelectorAll("[data-aid]").forEach(tr=>tr.onclick=()=>{LS.set("actedit",tr.dataset.aid);render();window.scrollTo(0,0)});
   const nb=$("#anew");if(nb)nb.onclick=()=>{LS.set("actedit",null);render()};
-  const f=$("#af");f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));if(!d.date||!d.sport){toast("Date and sport are needed");return}
+
+  const f=$("#af");
+  const fillWid=v=>{f.workout_id.innerHTML=widOptions(o,f.sport.value,f.date.value,v)};fillWid(cur.workout_id||"");
+  const dr=keepDraft(f,"act:"+(cur.id||"new"));if(dr.restored)fillWid(LS.get("draft:"+S.who+":act:"+(cur.id||"new"),{}).workout_id??(cur.workout_id||""));
+  f.sport.addEventListener("change",()=>fillWid(f.workout_id.value));f.date.addEventListener("change",()=>fillWid(f.workout_id.value));
+  m.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{fillWid(b.dataset.pick);f.workout_id.dispatchEvent(new Event("change",{bubbles:true}));toast(`${b.dataset.pick} selected. Tap Update activity to keep it.`)});
+  f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));if(!d.date||!d.sport){toast("Date and sport are needed");return}
     const id=cur.id||Math.random().toString(16).slice(2,12);f.querySelector(".btn").disabled=true;
     try{await editCSV(`data/${S.who}/activities.csv`,(rows,head)=>{rows=rows.filter(r=>r.id!==id);const r={id};head.forEach(k=>{if(k!=="id")r[k]=d[k]??""});rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)},`Activity ${d.date} ${d.sport} (${S.who})`);
-      LS.set("actedit",null);afterSave("Activity");render()}catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
+      dr.clear();LS.set("actedit",null);afterSave("Activity");render()}catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
   const del=$("#adel");if(del)del.onclick=async()=>{if(!confirm("Delete this activity?"))return;
     try{await editCSV(`data/${S.who}/activities.csv`,rows=>rows.filter(r=>r.id!==cur.id),`Delete activity ${cur.date} (${S.who})`);LS.set("actedit",null);afterSave("Delete");render()}catch(err){toast(err.message,6000)}};
 }
@@ -461,7 +510,7 @@ const SETF=[["name","Name","text"],["focus","Discipline focus","focus"],["race_n
  ["ftp","FTP (W)","number"],["ftp_date","FTP last tested","date"],["weight_fallback","Weight fallback (kg)","number"],["maxhr_manual","Max HR manual / last test","number"],["maxhr_date","Date of that max HR","date"]];
 async function vSettings(o,m){
   m.innerHTML=`<div class="card muted">Loading settings…</div>`;
-  const path=`config/athletes/${S.who}.json`;const {text,sha:fsha}=await getFile(path);let J=JSON.parse(text);
+  const who=S.who;const path=`config/athletes/${who}.json`;const {text,sha:fsha}=await getFile(path,CODE_REPO);let J=JSON.parse(text);
   const C=J.cycle||{};
   let h=`<div class="card"><h2>${esc(J.name)}'s settings</h2><form id="sf">
    <div class="row">${SETF.map(([k,l,t])=>t==="focus"?`<label>${l}<select name="${k}">${["Marathon skating","XCO MTB","Both"].map(x=>`<option ${J[k]===x?"selected":""}>${x}</option>`).join("")}</select></label>`:`<label>${l}<input name="${k}" type="${t}" step="any" value="${esc(J[k]??"")}"></label>`).join("")}</div>
@@ -475,10 +524,14 @@ async function vSettings(o,m){
      <label>Strong days from-to<input name="c_strong" value="${(C.strong_days||[]).join("-")}"></label>
      <label>Weak days from-to<input name="c_weak" value="${(C.weak_days||[]).join("-")}"></label></div></fieldset>`:""}
    <div class="actions" style="margin-top:12px"><button class="btn">Save settings</button></div></form></div>
-   <div class="card"><h2>Advanced: ${esc(path)}</h2><p class="small muted">Every value here overrides the shared defaults in config/defaults.json of the TrainingModel repository (weekly patterns, readiness weights, thresholds...).</p><textarea id="raw">${esc(JSON.stringify(J,null,2))}</textarea>
+   <div class="card"><h2>Advanced: ${esc(CODE_REPO+"/"+path)}</h2><p class="small muted">Every value here overrides the shared defaults in config/defaults.json of the TrainingModel repository (weekly patterns, readiness weights, thresholds...).</p><textarea id="raw">${esc(JSON.stringify(J,null,2))}</textarea>
    <div class="actions" style="margin-top:8px"><button class="btn ghost" id="saveraw">Save JSON</button></div></div>`+settingsConn();
-  m.innerHTML=h;bindSettingsConn();
-  const save=async(obj,what)=>{try{await putFile(path,JSON.stringify(obj,null,2)+"\n",fsha,`Settings ${S.who}: ${what}`);afterSave("Settings")}catch(e){toast(e.message,6000)}};
+  m.innerHTML=h;bindSettingsConn();const dr=keepDraft($("#sf"),"settings");
+  const save=async(obj,what)=>{try{
+    await putFile(path,JSON.stringify(obj,null,2)+"\n",fsha,`Settings ${who}: ${what}`,CODE_REPO);
+    // settings live in the code repository: ask the rider's repository to recalculate now
+    await gh("/dispatches",{repo:repoOf(who),method:"POST",body:JSON.stringify({event_type:"model-updated"})}).catch(()=>{});
+    dr.clear();afterSave("Settings")}catch(e){toast(e.message,6000)}};
   $("#sf").onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
     SETF.forEach(([k,,t])=>{if(d[k]!==undefined&&d[k]!=="")J[k]=t==="number"?+d[k]:d[k]});
     J.hr_zones=[0,1,2,3,4].map(i=>+d["hz"+i]/100);J.balance_drills=!!d.balance_drills;
@@ -487,14 +540,17 @@ async function vSettings(o,m){
     save(J,"form")};
   $("#saveraw").onclick=()=>{let obj;try{obj=JSON.parse($("#raw").value)}catch(e){toast("That isn't valid JSON: "+e.message,6000);return}save(obj,"JSON")};
 }
-function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.athletes.length>1?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)}</p>
+async function vAccount(o,m){m.innerHTML=settingsConn();bindSettingsConn()}
+function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.master?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)}</p>
   <div class="actions"><button class="btn ghost" id="reload">Reload data</button><button class="btn ghost" id="theme">Theme: ${LS.get("theme","auto")}</button><button class="btn bad" id="logout">Log out</button></div></div>`}
 function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};render()};
   const t=$("#theme");if(t)t.onclick=()=>{const n={auto:"light",light:"dark",dark:"auto"}[LS.get("theme","auto")];LS.set("theme",n);applyTheme();render()};
-  const l=$("#logout");if(l)l.onclick=()=>{if(!confirm("Log out and forget the token on this device?"))return;try{["conn","me","who","athletes"].forEach(k=>localStorage.removeItem(k))}catch(e){}S.conn=null;S.me=null;S.athletes=[];S.out={};shell();render()}}
+  const l=$("#logout");if(l)l.onclick=()=>{if(!confirm("Log out and forget the token on this device?"))return;try{["conn","me","who","athletes","master"].forEach(k=>localStorage.removeItem(k))}catch(e){}S.conn=null;S.me=null;S.master=false;S.athletes=[];S.out={};shell();render()}}
 function applyTheme(){const t=LS.get("theme","auto");if(t==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}
 
 applyTheme();shell();render();
+// master tabs are only shown while the token really reaches the code repository (localStorage can be edited)
+if(S.conn)gh("",{repo:CODE_REPO}).then(()=>true,()=>false).then(m=>{if(m!==S.master){S.master=m;LS.set("master",m);if(!tabs().some(x=>x[0]===S.tab))S.tab="today";shell();render()}});
 </script>
 </body>
 </html>
