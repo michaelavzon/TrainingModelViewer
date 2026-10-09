@@ -561,6 +561,15 @@ function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};re
   const l=$("#logout");if(l)l.onclick=()=>{if(!confirm("Log out and forget the token on this device?"))return;try{["conn","me","who","athletes","master"].forEach(k=>localStorage.removeItem(k))}catch(e){}S.conn=null;S.me=null;S.master=false;S.athletes=[];S.out={};shell();render()}}
 function applyTheme(){const t=LS.get("theme","auto");if(t==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}
 
+/* number fields: iPhone keypads in Dutch (and other) regions type "," as the decimal sign, which <input type=number>
+   rejects. So every number field is a text field with the decimal keypad, and "," becomes "." on save. */
+function fixNums(root){root.querySelectorAll('input[type="number"]').forEach(el=>{el.type="text";el.inputMode="decimal";el.classList.add("num");el.autocomplete="off"})}
+new MutationObserver(()=>fixNums($("#main"))).observe($("#main"),{childList:true,subtree:true});
+document.addEventListener("submit",e=>{const bad=[];
+  e.target.querySelectorAll("input.num").forEach(el=>{const v=el.value.trim().replace(/\s/g,"").replace(",",".");el.value=v;
+    if(v!==""&&!/^-?\d*\.?\d+$|^-?\d+\.$/.test(v))bad.push(el.closest("label")?.firstChild?.textContent?.trim()||el.name)});
+  if(bad.length){e.preventDefault();e.stopPropagation();toast("Not a number: "+bad.join(", "),6000)}},true);
+
 applyTheme();shell();render();
 // master tabs are only shown while the token really reaches the code repository (localStorage can be edited)
 if(S.conn)gh("",{repo:CODE_REPO}).then(()=>true,()=>false).then(m=>{if(m!==S.master){S.master=m;LS.set("master",m);if(!tabs().some(x=>x[0]===S.tab))S.tab="today";shell();render()}});
