@@ -137,7 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
-const APP_VERSION="1.3.1"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
+const APP_VERSION="1.3.2"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -477,7 +477,7 @@ async function vTrends(o,m){
   const days=LS.get("range",90);
   const H=o.history.filter(r=>r.date>=addDays(o.today,-days));
   m.innerHTML=`<div class="card actions"><span class="muted small">Range</span><div class="seg" id="rng">${[30,90,180,365].map(d=>`<button data-r="${d}" class="${d===days?"on":""}">${d} d</button>`).join("")}</div></div>
-  <div class="grid">${["Readiness","HRV","Resting HR","ATL / CTL","Daily load","Body Battery recharge","Weight","VO2max / Endurance Score","Sleep duration","Sleep score by duration"].map((t,i)=>`<div class="card"><h2>${t}</h2><canvas id="c${i}"></canvas>${i===8?`<canvas id="c8s" style="margin-top:6px"></canvas>`:""}${i>=8?`<p class="small muted" id="sl${i}"></p>`:""}</div>`).join("")}</div>
+  <div class="grid">${["Readiness","HRV","Resting HR","ATL / CTL","Daily load","Body Battery recharge","Weight","VO2max / Endurance Score","Sleep duration","Sleep score by duration"].map((t,i)=>`<div class="card"><h2>${t}</h2><canvas id="c${i}"></canvas>${i>=8?`<p class="small muted" id="sl${i}"></p>`:""}</div>`).join("")}</div>
   <div class="card"><h2>Days by class (selected range)</h2><div id="cls" class="small"></div></div>`;
   m.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{LS.set("range",+b.dataset.r);render()});
   const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
@@ -499,16 +499,13 @@ async function vTrends(o,m){
   // sleep: hours per night with the sweet spot shaded, and the average score per half hour of sleep (your history)
   const SL=o.model.sleep||{bins:[],nights:0},B=SL.best,fh=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`};
   const band=B?[{label:"best",data:H.map(()=>B.to),borderWidth:0,pointRadius:0,fill:false},{label:"best",data:H.map(()=>B.from),borderWidth:0,pointRadius:0,fill:"-1",backgroundColor:acc+"26"}]:[];
-  S.charts.push(new Chart($("#c8"),{type:"line",data:{labels,datasets:[{label:"Hours",data:s("sleep_h"),borderColor:c4},...band]},options:{animation:false,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
-    plugins:{legend:{display:false},tooltip:{filter:i=>i.dataset.label==="Hours",callbacks:{label:i=>`Slept ${fh(i.parsed.y)} h`,afterLabel:i=>H[i.dataIndex].sleep!=null?`Sleep score ${H[i.dataIndex].sleep}`:""}}},elements:{point:{radius:0},line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},y:{title:{display:true,text:"hours"}}}}}));
-  // the score per night underneath, on the same dates (its own scale, so not a second axis on the hours chart)
-  S.charts.push(new Chart($("#c8s"),{type:"line",data:{labels,datasets:[{label:"Sleep score",data:s("sleep"),borderColor:acc,pointRadius:0}]},options:{animation:false,aspectRatio:3,spanGaps:true,interaction:{mode:"index",intersect:false},
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`Sleep score ${i.parsed.y}`,afterLabel:i=>H[i.dataIndex].sleep_h!=null?`Slept ${fh(H[i.dataIndex].sleep_h)} h`:""}}},elements:{line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},y:{title:{display:true,text:"score"},suggestedMin:40,suggestedMax:100}}}}));
+  S.charts.push(new Chart($("#c8"),{type:"line",data:{labels,datasets:[{label:"Hours",data:s("sleep_h"),borderColor:c4,yAxisID:"y"},{label:"Score",data:s("sleep"),yAxisID:"y1",showLine:false,pointRadius:2.5,pointHoverRadius:4,backgroundColor:acc,borderColor:acc},...band.map(d=>({...d,yAxisID:"y"}))]},options:{animation:false,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{filter:i=>i.dataset.label!=="best",callbacks:{label:i=>i.dataset.label==="Hours"?`Slept ${fh(i.parsed.y)} h`:`Sleep score ${i.parsed.y}`}}},elements:{point:{radius:0},line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},y:{position:"left",title:{display:true,text:"hours (line)"}},y1:{position:"right",suggestedMin:40,suggestedMax:100,grid:{display:false},title:{display:true,text:"score (dots)"}}}}}));
   S.charts.push(new Chart($("#c9"),{type:"bar",data:{labels:SL.bins.map(b=>`${b.from}-${b.to}`),datasets:[{label:"Avg sleep score",data:SL.bins.map(b=>b.score),borderRadius:4,
     backgroundColor:SL.bins.map(b=>B&&b.from>=B.from&&b.to<=B.to?acc:b.n<3?grid:ink)}]},options:{animation:false,aspectRatio:1.8,plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`Score ${SL.bins[i.dataIndex].score} · ${SL.bins[i.dataIndex].n} nights`}}},
     scales:{x:{title:{display:true,text:"hours slept"}},y:{title:{display:true,text:"sleep score"}}}}}));
   const slt=B?`Your sweet spot: ${fh(B.from)}-${fh(B.to)} h of sleep (average score ${B.score}), from ${SL.nights} nights in the last year.`:`The sweet spot shows once there are 10 nights with both sleep hours and sleep score (now ${SL.nights}).`;
-  $("#sl8").textContent=(B?`Top: hours slept, your sweet spot ${fh(B.from)}-${fh(B.to)} h shaded.`:slt)+" Bottom: sleep score of the same nights.";$("#sl9").textContent=slt+" Highlighted bars: within 3 points of your best; pale bars: fewer than 3 nights.";
+  $("#sl8").textContent=(B?`Line: hours slept (left axis), your sweet spot ${fh(B.from)}-${fh(B.to)} h shaded.`:slt)+" Dots: sleep score (right axis).";$("#sl9").textContent=slt+" Highlighted bars: within 3 points of your best; pale bars: fewer than 3 nights.";
   const cnt={};H.forEach(r=>{const k=r.class||"Not logged";cnt[k]=(cnt[k]||0)+1});
   $("#cls").innerHTML=Object.entries(cnt).map(([k,v])=>`<span class="pill">${esc(k)}: ${v}</span>`).join("");
 }
