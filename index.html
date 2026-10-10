@@ -137,7 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
-const APP_VERSION="1.3.3"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
+const APP_VERSION="1.3.4"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -503,7 +503,7 @@ async function vTrends(o,m){
   // sleep: hours per night with the sweet spot shaded, and the average score per half hour of sleep (your history)
   const SL=o.model.sleep||{bins:[],nights:0},B=SL.best,fh=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`};
   const band=B?[{label:"best",data:H.map(()=>B.to),borderWidth:0,pointRadius:0,fill:false},{label:"best",data:H.map(()=>B.from),borderWidth:0,pointRadius:0,fill:"-1",backgroundColor:acc+"26"}]:[];
-  S.charts.push(new Chart($("#c8"),{type:"line",data:{labels,datasets:[{label:"Hours",data:s("sleep_h"),borderColor:c4,yAxisID:"y"},{label:"Score",data:s("sleep"),yAxisID:"y1",showLine:false,pointRadius:2.5,pointHoverRadius:4,backgroundColor:acc,borderColor:acc},...band.map(d=>({...d,yAxisID:"y"}))]},options:{animation:false,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
+  S.charts.push(new Chart($("#c8"),{type:"line",data:{labels,datasets:[{label:"Hours",data:s("sleep_h"),borderColor:acc,yAxisID:"y"},{label:"Score",data:s("sleep"),yAxisID:"y1",showLine:false,pointRadius:2.5,pointHoverRadius:4,backgroundColor:c2,borderColor:c2},...band.map(d=>({...d,yAxisID:"y"}))]},options:{animation:false,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
     plugins:{legend:{display:false},tooltip:{filter:i=>i.dataset.label!=="best",callbacks:{label:i=>i.dataset.label==="Hours"?`Slept ${fh(i.parsed.y)} h`:`Sleep score ${i.parsed.y}`}}},elements:{point:{radius:0},line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},y:{position:"left",title:{display:true,text:"hours (line)"}},y1:{position:"right",suggestedMin:40,suggestedMax:100,grid:{display:false},title:{display:true,text:"score (dots)"}}}}}));
   S.charts.push(new Chart($("#c9"),{type:"bar",data:{labels:SL.bins.map(b=>`${b.from}-${b.to}`),datasets:[{label:"Avg sleep score",data:SL.bins.map(b=>b.score),borderRadius:4,
     backgroundColor:SL.bins.map(b=>B&&b.from>=B.from&&b.to<=B.to?acc:b.n<3?grid:ink)}]},options:{animation:false,aspectRatio:1.8,plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`Score ${SL.bins[i.dataIndex].score} · ${SL.bins[i.dataIndex].n} nights`}}},
