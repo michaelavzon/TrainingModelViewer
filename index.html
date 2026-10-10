@@ -194,8 +194,8 @@ async function loadOut(who,force){
   if(S.out[who]&&!force)return S.out[who];
   const txt=await getRaw(`out/${who}.json`);S.out[who]=JSON.parse(txt);return S.out[who]}
 let watch=null;
-async function afterSave(what){
-  toast(`${what} saved. The model is recalculating…`,5000);
+async function afterSave(what,msg){
+  toast(msg||`${what} saved. The model is recalculating…`,5000);
   const who=S.who;const before=await sha(`out/${who}.json`).catch(()=>null);
   clearInterval(watch);let n=0;setStatus("Recalculating… (usually under a minute)");
   watch=setInterval(async()=>{n++;
@@ -256,6 +256,10 @@ function bindConnect(){const f=$("#cf");if(!f)return;f.onsubmit=async e=>{e.prev
 async function vToday(o,m){
   const D=o.dashboard,t=D.today,R=D.readiness,F=D.form||{},W=D.week,G=D.signals||{};
   let h="";
+  // Garmin activities of the last 3 days still without PE or feel
+  const ask=(o.activities||[]).filter(a=>a.ext_id&&(a.pe==null||!a.feel)&&a.date>=addDays(o.today,-3));
+  if(ask.length)h+=`<div class="card"><h2>How did it feel?</h2><p class="small">These came in from Garmin without PE or feel. Both feed into your readiness score.</p>
+    <div class="actions">${ask.map(a=>`<button class="btn ghost" data-editact="${esc(a.id)}">${dlabel(a.date)} · ${esc(a.sport)} ${fmtMin(a.minutes)}</button>`).join("")}</div></div>`;
   if(D.outside_plan){h+=`<div class="card"><h2>Today</h2><p>Today is outside the plan dates. The main event (${esc(D.event.name)}, ${esc(D.event.date)}) ${D.event.days<0?"has passed":"is ahead"}: ${masterView()?"set the next main event and plan start under Settings.":"ask Mike to set the next main event and plan start."}</p></div>`}
   else{
     h+=`<div class="card"><h2>Today · ${esc(D.phase)} phase · ${D.event.days===0?"race day":D.event.days+(D.event.days===1?" day":" days")+" to "+esc(D.event.name)}</h2>
@@ -308,6 +312,7 @@ async function vToday(o,m){
   </div></div></div>`;
   h+=`<div class="card"><h2>Next 7 days</h2>${D.next7.map(d=>`<div class="day" style="cursor:default"><div class="top"><span style="width:92px">${dlabel(d.date)}</span>${badge(d.type)}<span>${fmtMin(d.minutes)}</span><span class="muted">${esc(d.session)}</span><span class="muted small">load ${fmt(d.load)}</span></div>${d.adjustments?`<div class="small muted">${esc(d.adjustments)}</div>`:""}</div>`).join("")||"<p class='muted'>The plan ends here.</p>"}</div>`;
   m.innerHTML=h;
+  m.querySelectorAll("[data-editact]").forEach(b=>b.onclick=()=>{LS.set("actedit",b.dataset.editact);S.tab="acts";LS.set("tab","acts");shell();render();window.scrollTo(0,0)});
 }
 const PARTN={tr:"Garmin readiness",hrv:"HRV",ratio:"Load ratio",bb:"Body Battery",feel:"Feel",rhr:"Resting HR",pe:"PE vs TE",sleep:"Sleep",rec:"Recovery time"};
 const FEELN=["Very Weak","Weak","Normal","Strong","Very Strong"];
@@ -408,6 +413,13 @@ function widOptions(o,sport,date,val){
     (planned.length?`<optgroup label="Planned around this date">${planned.map(opt).join("")}</optgroup>`:"")+
     (rest.length?`<optgroup label="${sport?"Sessions for this sport":"All sessions"}">${rest.map(opt).join("")}</optgroup>`:"")}
 function afield(k,l,t,val,L){if(t==="wid")return `<label>${l}<select name="${k}"></select></label>`;if(t.startsWith("list:")){const lk=t.slice(5);return `<label>${l}<select name="${k}"><option value=""></option>${L[lk].map(h=>`<option ${val===h?"selected":""}>${esc(h)}</option>`).join("")}</select></label>`}return field(k,l,t,val,L)}
+/* Garmin sync (intervals.icu): a deleted synced activity goes on data/<rider>/sync_ignore.csv so it isn't added again */
+async function ignoreSynced(r){const p=`data/${S.who}/sync_ignore.csv`;
+  try{await editCSV(p,rows=>rows.concat([{ext_id:r.ext_id,date:r.date,note:r.sport||""}]),`Ignore Garmin activity ${r.date} (${S.who})`)}
+  catch(e){if(e.status!==404)throw e;await putFile(p,toCSV(["ext_id","date","note"],[{ext_id:r.ext_id,date:r.date,note:r.sport||""}]),null,`Ignore Garmin activity ${r.date} (${S.who})`)}}
+async function syncNow(){try{await gh("/dispatches",{method:"POST",body:JSON.stringify({event_type:"model-updated"})});
+  afterSave("","Garmin sync started. New activities show up when it finishes.")}catch(e){toast("Could not start the sync: "+e.message,6000)}}
+const missingPF=r=>!!r.ext_id&&(!r.pe||!r.feel);
 function widCell(r,c){
   if(r.workout_id==="-")return `<span class="muted">free</span>`;
   if(r.workout_id)return esc(r.workout_id);
@@ -434,10 +446,11 @@ async function vActs(o,m){
     <div class="actions" style="margin-top:12px"><button class="btn">${cur.id?"Update":"Add"} activity</button>${cur.id?`<button type="button" class="btn ghost" id="anew">New instead</button><button type="button" class="btn bad" id="adel">Delete</button>`:""}</div></form>
     <p class="small muted">Plan session: leave it on "Auto-detect". The model matches the activity to the plan from the date, sport, duration, time in HR and power zones and Garmin's primary benefit. Pick a session only to correct it. Targets hit is then checked automatically.</p></div>`;
   const recent=rows.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
-  h+=`<div class="card"><h2>Recent activities</h2><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
-   ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${widCell(r,c)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
-   <p class="small muted">* load estimated from heart rate (no Garmin load logged). Tap a row to edit it. New rows show computed values after the model recalculates.</p></div>`;
+  h+=`<div class="card"><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Recent activities</h2>${rows.some(r=>r.ext_id)||o.garmin_sync?`<button class="btn ghost" id="gsync">Sync now</button>`:""}</div><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
+   ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}${r.ext_id?` <span class="muted small">Garmin</span>`:""}${missingPF(r)?` <span class="small" style="color:var(--warn)">add PE/feel</span>`:""}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${widCell(r,c)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
+   <p class="small muted">* load estimated from heart rate (no Garmin load logged). Tap a row to edit it. New rows show computed values after the model recalculates. "Garmin" rows came in automatically; edit them like any other row.</p></div>`;
   m.innerHTML=h;
+  const gs=$("#gsync");if(gs)gs.onclick=()=>{gs.disabled=true;syncNow()};
   m.querySelectorAll("[data-aid]").forEach(tr=>tr.onclick=()=>{LS.set("actedit",tr.dataset.aid);render();window.scrollTo(0,0)});
   const nb=$("#anew");if(nb)nb.onclick=()=>{LS.set("actedit",null);render()};
 
@@ -448,10 +461,11 @@ async function vActs(o,m){
   m.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{fillWid(b.dataset.pick);f.workout_id.dispatchEvent(new Event("change",{bubbles:true}));toast(`${b.dataset.pick} selected. Tap Update activity to keep it.`)});
   f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));if(!d.date||!d.sport){toast("Date and sport are needed");return}
     const id=cur.id||Math.random().toString(16).slice(2,12);f.querySelector(".btn").disabled=true;
-    try{await editCSV(`data/${S.who}/activities.csv`,(rows,head)=>{rows=rows.filter(r=>r.id!==id);const r={id};head.forEach(k=>{if(k!=="id")r[k]=d[k]??""});rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)},`Activity ${d.date} ${d.sport} (${S.who})`);
+    try{await editCSV(`data/${S.who}/activities.csv`,(rows,head)=>{const r={...(rows.find(x=>x.id===id)||{}),id};rows=rows.filter(x=>x.id!==id);head.forEach(k=>{if(k!=="id"&&k in d)r[k]=d[k]});rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)},`Activity ${d.date} ${d.sport} (${S.who})`);
       dr.clear();LS.set("actedit",null);afterSave("Activity");render()}catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
   const del=$("#adel");if(del)del.onclick=async()=>{if(!confirm("Delete this activity?"))return;
-    try{await editCSV(`data/${S.who}/activities.csv`,rows=>rows.filter(r=>r.id!==cur.id),`Delete activity ${cur.date} (${S.who})`);LS.set("actedit",null);afterSave("Delete");render()}catch(err){toast(err.message,6000)}};
+    try{await editCSV(`data/${S.who}/activities.csv`,rows=>rows.filter(r=>r.id!==cur.id),`Delete activity ${cur.date} (${S.who})`);
+      if(cur.ext_id)await ignoreSynced(cur);LS.set("actedit",null);afterSave("Delete");render()}catch(err){toast(err.message,6000)}};
 }
 
 /* ------------------------------------------------------------------ TRENDS */
