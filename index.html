@@ -137,7 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
-const APP_VERSION="1.3.2"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
+const APP_VERSION="1.3.3"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -203,7 +203,11 @@ async function afterSave(what,msg){
   watch=setInterval(async()=>{n++;
     try{const now=await sha(`out/${who}.json`);if(now&&now!==before){clearInterval(watch);await loadOut(who,true);setStatus();render();toast("Updated with your new data")}}catch(e){}
     if(n>24){clearInterval(watch);setStatus("Still recalculating. Reload in a minute, or check the Actions tab of the model repository.")}},8000)}
-function setStatus(extra){const o=S.out[S.who];$("#ver").textContent="v"+((o&&o.kairos_version)||APP_VERSION);$("#status").textContent=(extra?extra+" · ":"")+(o?`Calculated ${new Date(o.generated).toLocaleString()}`:"")}
+// the newest of the app's own version and the version that last calculated the data (that one only changes when the
+// rider's data is recalculated, so after a code update it can lag behind until the next run)
+const vnum=v=>String(v||"0").split(".").map(Number);
+const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0)?a:b}return a};
+function setStatus(extra){const o=S.out[S.who];$("#ver").textContent="v"+newer(APP_VERSION,o&&o.kairos_version);$("#status").textContent=(extra?extra+" · ":"")+(o?`Calculated ${new Date(o.generated).toLocaleString()}`:"")}
 
 /* ------------------------------------------------------------------ shell */
 function shell(){
