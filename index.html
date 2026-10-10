@@ -137,7 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
-const APP_VERSION="1.2"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
+const APP_VERSION="1.3"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -357,7 +357,7 @@ async function vPlan(o,m){
 }
 
 /* ------------------------------------------------------------------ MORNING LOG */
-const LOGF=[["Garmin readiness",[["tr","Training Readiness","number"],["sleep","Sleep score","number"],["rec","Recovery time (h)","number"]]],
+const LOGF=[["Garmin readiness",[["tr","Training Readiness","number"],["sleep","Sleep score","number"],["sleep_h","Sleep (hours, e.g. 7.5)","number"],["rec","Recovery time (h)","number"]]],
  ["HRV",[["hrv_night","HRV last night (ms)","number"],["hrv_7d","HRV 7-day avg","number"],["hrv_low","Baseline low","number"],["hrv_high","Baseline high","number"]]],
  ["Resting HR and Body Battery",[["rhr","Resting HR this morning","number"],["rhr_7d","Resting HR 7-day avg","number"],["bb_recharge","Body Battery recharge (overnight)","number"],["bb_min_yday","Body Battery min yesterday","number"]]],
  ["You",[["health","Health (sick / injured)","health"],["weight","Weight (kg)","number"]]],
@@ -391,7 +391,7 @@ async function vLog(o,m){
   f.date.onchange=()=>{LS.set("logdate",f.date.value);render()};
   m.querySelectorAll("[data-ld]").forEach(tr=>tr.onclick=()=>{LS.set("logdate",tr.dataset.ld);render()});
   f.onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(f));f.querySelector(".btn").disabled=true;
-    try{await editCSV(`data/${S.who}/log.csv`,(rows,head)=>{rows=rows.filter(r=>r.date!==d.date);const r={};head.forEach(k=>r[k]=d[k]??"");rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:1)},`Morning log ${d.date} (${S.who})`);dr.clear();afterSave("Morning log")}
+    try{await editCSV(`data/${S.who}/log.csv`,(rows,head)=>{Object.keys(d).forEach(k=>{if(!head.includes(k)){const i=head.indexOf("note");head.splice(i<0?head.length:i,0,k)}});rows=rows.filter(r=>r.date!==d.date);const r={};head.forEach(k=>r[k]=d[k]??"");rows.push(r);return rows.sort((a,b)=>a.date<b.date?-1:1)},`Morning log ${d.date} (${S.who})`);dr.clear();afterSave("Morning log")}
     catch(err){toast(err.message,6000)}finally{f.querySelector(".btn").disabled=false}};
   const del=$("#ldel");if(del)del.onclick=async()=>{if(!confirm("Delete this morning's row?"))return;
     try{await editCSV(`data/${S.who}/log.csv`,rows=>rows.filter(r=>r.date!==date),`Delete morning ${date} (${S.who})`);afterSave("Delete")}catch(err){toast(err.message,6000)}};
@@ -477,7 +477,7 @@ async function vTrends(o,m){
   const days=LS.get("range",90);
   const H=o.history.filter(r=>r.date>=addDays(o.today,-days));
   m.innerHTML=`<div class="card actions"><span class="muted small">Range</span><div class="seg" id="rng">${[30,90,180,365].map(d=>`<button data-r="${d}" class="${d===days?"on":""}">${d} d</button>`).join("")}</div></div>
-  <div class="grid">${["Readiness","HRV","Resting HR","ATL / CTL","Daily load","Body Battery recharge","Weight","VO2max / Endurance Score"].map((t,i)=>`<div class="card"><h2>${t}</h2><canvas id="c${i}"></canvas></div>`).join("")}</div>
+  <div class="grid">${["Readiness","HRV","Resting HR","ATL / CTL","Daily load","Body Battery recharge","Weight","VO2max / Endurance Score","Sleep duration","Sleep score by duration"].map((t,i)=>`<div class="card"><h2>${t}</h2><canvas id="c${i}"></canvas>${i>=8?`<p class="small muted" id="sl${i}"></p>`:""}</div>`).join("")}</div>
   <div class="card"><h2>Days by class (selected range)</h2><div id="cls" class="small"></div></div>`;
   m.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{LS.set("range",+b.dataset.r);render()});
   const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
@@ -496,6 +496,16 @@ async function vTrends(o,m){
   mk("c5",[{label:"Recharge",data:s("bb"),borderColor:c3}]);
   mk("c6",[{label:"kg",data:s("weight"),borderColor:c4}]);
   mk("c7",[{label:"VO2max",data:s("vo2"),borderColor:acc,yAxisID:"y"},{label:"Endurance Score",data:s("es"),borderColor:c2,yAxisID:"y1"}],{scales:{y:{position:"left"},y1:{position:"right",grid:{display:false}}}});
+  // sleep: hours per night with the sweet spot shaded, and the average score per half hour of sleep (your history)
+  const SL=o.model.sleep||{bins:[],nights:0},B=SL.best,fh=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`};
+  const band=B?[{label:"best",data:H.map(()=>B.to),borderWidth:0,pointRadius:0,fill:false},{label:"best",data:H.map(()=>B.from),borderWidth:0,pointRadius:0,fill:"-1",backgroundColor:acc+"26"}]:[];
+  S.charts.push(new Chart($("#c8"),{type:"line",data:{labels,datasets:[{label:"Hours",data:s("sleep_h"),borderColor:c4},...band]},options:{animation:false,aspectRatio:1.8,spanGaps:true,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{filter:i=>i.dataset.label==="Hours",callbacks:{label:i=>`Slept ${fh(i.parsed.y)} h`}}},elements:{point:{radius:0},line:{borderWidth:2,tension:.25}},scales:{x:{ticks:{maxTicksLimit:6}},y:{title:{display:true,text:"hours"}}}}}));
+  S.charts.push(new Chart($("#c9"),{type:"bar",data:{labels:SL.bins.map(b=>`${b.from}-${b.to}`),datasets:[{label:"Avg sleep score",data:SL.bins.map(b=>b.score),borderRadius:4,
+    backgroundColor:SL.bins.map(b=>B&&b.from>=B.from&&b.to<=B.to?acc:b.n<3?grid:ink)}]},options:{animation:false,aspectRatio:1.8,plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`Score ${SL.bins[i.dataIndex].score} · ${SL.bins[i.dataIndex].n} nights`}}},
+    scales:{x:{title:{display:true,text:"hours slept"}},y:{title:{display:true,text:"sleep score"}}}}}));
+  const slt=B?`Your sweet spot: ${fh(B.from)}-${fh(B.to)} h of sleep (average score ${B.score}), from ${SL.nights} nights in the last year.`:`The sweet spot shows once there are 10 nights with both sleep hours and sleep score (now ${SL.nights}).`;
+  $("#sl8").textContent=B?`Shaded: your sweet spot, ${fh(B.from)}-${fh(B.to)} h.`:slt;$("#sl9").textContent=slt+" Highlighted bars: within 3 points of your best; pale bars: fewer than 3 nights.";
   const cnt={};H.forEach(r=>{const k=r.class||"Not logged";cnt[k]=(cnt[k]||0)+1});
   $("#cls").innerHTML=Object.entries(cnt).map(([k,v])=>`<span class="pill">${esc(k)}: ${v}</span>`).join("");
 }
