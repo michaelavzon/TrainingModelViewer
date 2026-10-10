@@ -40,6 +40,7 @@ header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px 
 .brand{display:flex;align-items:center;gap:9px;margin-bottom:4px}
 .brand img{width:34px;height:34px;border-radius:9px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .brand b{display:block;font-size:19px;letter-spacing:.06em;line-height:1.1}
+.brand .ver{font-size:11px;font-weight:500;letter-spacing:0;color:var(--muted)}
 .brand small{display:block;font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar h1{font-size:15px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg{display:inline-flex;background:var(--chip);border-radius:999px;padding:3px}
@@ -97,7 +98,7 @@ canvas{max-height:260px}
 <header>
   <div class="bar">
     <div class="head">
-      <div class="brand"><img src="icon.svg" alt=""><div><b>KAIROS</b><small>This is the moment.</small></div></div>
+      <div class="brand"><img src="icon.svg" alt=""><div><b>KAIROS <span class="ver" id="ver"></span></b><small>This is the moment.</small></div></div>
       <h1 id="title"></h1>
     </div>
     <div class="seg" id="who"></div>
@@ -136,6 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
+const APP_VERSION="1.1"; // keep in step with VERSIONS.md in TrainingModel
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -446,7 +448,7 @@ async function vActs(o,m){
     <div class="actions" style="margin-top:12px"><button class="btn">${cur.id?"Update":"Add"} activity</button>${cur.id?`<button type="button" class="btn ghost" id="anew">New instead</button><button type="button" class="btn bad" id="adel">Delete</button>`:""}</div></form>
     <p class="small muted">Plan session: leave it on "Auto-detect". The model matches the activity to the plan from the date, sport, duration, time in HR and power zones and Garmin's primary benefit. Pick a session only to correct it. Targets hit is then checked automatically.</p></div>`;
   const recent=rows.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
-  h+=`<div class="card"><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Recent activities</h2>${rows.some(r=>r.ext_id)||o.garmin_sync?`<button class="btn ghost" id="gsync">Sync now</button>`:""}</div><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
+  h+=`<div class="card"><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Recent activities</h2><button class="btn ghost" id="gsync" title="Get new Garmin activities and recalculate">Sync now</button></div><div class="scroll"><table><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th><th>Class</th><th>Workout</th><th>Targets</th></tr>
    ${recent.map(r=>{const c=comp[r.id]||{};return `<tr data-aid="${esc(r.id)}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${esc(r.sport)}${r.ext_id?` <span class="muted small">Garmin</span>`:""}${missingPF(r)?` <span class="small" style="color:var(--warn)">add PE/feel</span>`:""}</td><td>${fmtMin(+r.minutes)}</td><td>${fmt(c.load??r.load)}${c.garmin_load===false?"*":""}</td><td>${esc(c.class||"")}</td><td>${widCell(r,c)}</td><td class="small">${c.result==null?"":["missed","partly / repeat","hit"][c.result]}</td></tr>`}).join("")}</table></div>
    <p class="small muted">* load estimated from heart rate (no Garmin load logged). Tap a row to edit it. New rows show computed values after the model recalculates. "Garmin" rows came in automatically; edit them like any other row.</p></div>`;
   m.innerHTML=h;
@@ -568,9 +570,10 @@ async function vSettings(o,m){
   $("#saveraw").onclick=()=>{let obj;try{obj=JSON.parse($("#raw").value)}catch(e){toast("That isn't valid JSON: "+e.message,6000);return}save(obj,"JSON")};
 }
 async function vAccount(o,m){m.innerHTML=settingsConn();bindSettingsConn()}
-function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.master?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)}</p>
+function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.master?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)} · Kairos v${APP_VERSION}</p>
+  ${!S.master&&S.me===MASTER?`<p class="small" style="color:var(--warn)">This token can't open the ${esc(CODE_REPO)} repository, so Model, Workouts and Settings are hidden. On GitHub, edit the token: add ${esc(CODE_REPO)} under Repository access with Contents: Read and write, then tap Reload data.</p>`:""}
   <div class="actions"><button class="btn ghost" id="reload">Reload data</button><button class="btn ghost" id="theme">Theme: ${LS.get("theme","auto")}</button><button class="btn bad" id="logout">Log out</button></div></div>`}
-function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};render()};
+function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};render();checkMaster()};
   const t=$("#theme");if(t)t.onclick=()=>{const n={auto:"light",light:"dark",dark:"auto"}[LS.get("theme","auto")];LS.set("theme",n);applyTheme();render()};
   const l=$("#logout");if(l)l.onclick=()=>{if(!confirm("Log out and forget the token on this device?"))return;try{["conn","me","who","athletes","master"].forEach(k=>localStorage.removeItem(k))}catch(e){}S.conn=null;S.me=null;S.master=false;S.athletes=[];S.out={};shell();render()}}
 function applyTheme(){const t=LS.get("theme","auto");if(t==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}
@@ -586,7 +589,9 @@ document.addEventListener("submit",e=>{const bad=[];
 
 applyTheme();shell();render();
 // master tabs are only shown while the token really reaches the code repository (localStorage can be edited)
-if(S.conn)gh("",{repo:CODE_REPO}).then(()=>true,()=>false).then(m=>{if(m!==S.master){S.master=m;LS.set("master",m);if(!tabs().some(x=>x[0]===S.tab))S.tab="today";shell();render()}});
+// only a clear "no access" answer hides them; a network hiccup or rate limit keeps what the login found
+function checkMaster(){if(!S.conn)return;gh("",{repo:CODE_REPO}).then(()=>true,err=>[401,403,404].includes(err.status)?false:S.master).then(m=>{if(m!==S.master){S.master=m;LS.set("master",m);if(!tabs().some(x=>x[0]===S.tab))S.tab="today";shell();render()}})}
+$("#ver").textContent="v"+APP_VERSION;checkMaster();
 </script>
 </body>
 </html>
