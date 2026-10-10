@@ -137,7 +137,7 @@ const MASTER="mike";
 /* The model code and every rider's settings live in this repository. Only the master token can open it, so only the
    master sees the Model, Workouts and Settings tabs and can change settings. */
 const CODE_REPO="TrainingModel";
-const APP_VERSION="1.1"; // keep in step with VERSIONS.md in TrainingModel
+const APP_VERSION="1.2"; // this file's version; the header shows the model's (VERSION in TrainingModel) once loaded
 const S={conn:LS.get("conn",null),athletes:LS.get("athletes",[]),master:LS.get("master",false),me:LS.get("me",null),who:LS.get("who",null),tab:LS.get("tab","today"),out:{},charts:[]};
 if(S.conn&&!S.athletes.length)S.conn=null;
 if(!S.athletes.includes(S.who))S.who=S.me||S.athletes[0]||null;
@@ -203,7 +203,7 @@ async function afterSave(what,msg){
   watch=setInterval(async()=>{n++;
     try{const now=await sha(`out/${who}.json`);if(now&&now!==before){clearInterval(watch);await loadOut(who,true);setStatus();render();toast("Updated with your new data")}}catch(e){}
     if(n>24){clearInterval(watch);setStatus("Still recalculating. Reload in a minute, or check the Actions tab of the model repository.")}},8000)}
-function setStatus(extra){const o=S.out[S.who];$("#status").textContent=(extra?extra+" · ":"")+(o?`Calculated ${new Date(o.generated).toLocaleString()}`:"")}
+function setStatus(extra){const o=S.out[S.who];$("#ver").textContent="v"+((o&&o.kairos_version)||APP_VERSION);$("#status").textContent=(extra?extra+" · ":"")+(o?`Calculated ${new Date(o.generated).toLocaleString()}`:"")}
 
 /* ------------------------------------------------------------------ shell */
 function shell(){
@@ -376,7 +376,8 @@ async function vLog(o,m){
   m.innerHTML=`<div class="card muted">Loading the log…</div>`;
   const {text}=await getFile(`data/${S.who}/log.csv`);const rows=parseCSV(text).rows;const cur=rows.find(r=>r.date===date)||{};
   const groups=o.settings.cycle?[...LOGF.slice(0,4),CYCF,...LOGF.slice(4)]:LOGF;
-  let h=`<div class="card"><h2>Morning log · one row per morning, at wake-up</h2>
+  let h=`<div class="card"><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Morning log · one row per morning, at wake-up</h2><button class="btn ghost" id="gsync" title="Get Garmin health stats and activities, and recalculate">Sync now</button></div>
+  <p class="small muted">With the Garmin sync on, resting HR, HRV, sleep score, weight and VO2max fill in by themselves (only empty fields). Add the rest yourself.</p>
   <form id="lf"><div class="row"><label>Date<input name="date" type="date" value="${date}" required></label></div>
   ${groups.map(([g,fs])=>`<fieldset><legend>${g}</legend><div class="row">${fs.map(([k,l,t])=>field(k,l,t,cur[k],L)).join("")}</div></fieldset>`).join("")}
   <label>Notes<input name="note" value="${esc(cur.note||"")}"></label>
@@ -385,6 +386,7 @@ async function vLog(o,m){
   h+=`<div class="card"><h2>Recent mornings</h2><div class="scroll"><table><tr><th>Date</th><th>Readiness</th><th>Max</th><th>HRV</th><th>RHR</th><th>ATL/CTL</th><th>Health</th></tr>
   ${recent.map(r=>`<tr data-ld="${r.date}" style="cursor:pointer"><td>${dlabel(r.date)}</td><td>${fmt(r.ready)}</td><td>${r.maxtier==null?"–":["Rest","Recovery","Endurance","Tempo","Hard"][r.maxtier]}</td><td>${fmt(r.hrv)}</td><td>${fmt(r.rhr)}</td><td>${fmt(r.atl)}/${fmt(r.ctl)}</td><td>${fmt(r.health)}</td></tr>`).join("")}</table></div></div>`;
   m.innerHTML=h;
+  const gs=$("#gsync");if(gs)gs.onclick=()=>{gs.disabled=true;syncNow()};
   const f=$("#lf");const dr=keepDraft(f,"log:"+date,["date"]);
   f.date.onchange=()=>{LS.set("logdate",f.date.value);render()};
   m.querySelectorAll("[data-ld]").forEach(tr=>tr.onclick=()=>{LS.set("logdate",tr.dataset.ld);render()});
@@ -570,7 +572,7 @@ async function vSettings(o,m){
   $("#saveraw").onclick=()=>{let obj;try{obj=JSON.parse($("#raw").value)}catch(e){toast("That isn't valid JSON: "+e.message,6000);return}save(obj,"JSON")};
 }
 async function vAccount(o,m){m.innerHTML=settingsConn();bindSettingsConn()}
-function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.master?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)} · Kairos v${APP_VERSION}</p>
+function settingsConn(){const c=S.conn||{};return `<div class="card"><h2>Login (this device only)</h2><p class="small">Logged in as <b>${esc(cap(S.me)||"?")}</b>${S.master?" (master: sees "+esc(S.athletes.map(cap).join(", "))+")":""} · ${esc(c.owner)}/${esc(repoOf(S.who))} · branch ${esc(c.branch)} · Kairos v${esc((S.out[S.who]||{}).kairos_version||"?")} (model) · v${APP_VERSION} (app)</p>
   ${!S.master&&S.me===MASTER?`<p class="small" style="color:var(--warn)">This token can't open the ${esc(CODE_REPO)} repository, so Model, Workouts and Settings are hidden. On GitHub, edit the token: add ${esc(CODE_REPO)} under Repository access with Contents: Read and write, then tap Reload data.</p>`:""}
   <div class="actions"><button class="btn ghost" id="reload">Reload data</button><button class="btn ghost" id="theme">Theme: ${LS.get("theme","auto")}</button><button class="btn bad" id="logout">Log out</button></div></div>`}
 function bindSettingsConn(){const r=$("#reload");if(r)r.onclick=()=>{S.out={};render();checkMaster()};
